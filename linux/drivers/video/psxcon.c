@@ -27,18 +27,17 @@
 #include <asm/ps/libpsx.h>
 #include <asm/io.h>
 
-#define PSXVGA_SCR_H	21
-#define PSXVGA_SCR_W	37
-
-#ifdef CONFIG_VT_CONSOLE_HIRES
-#define PSXVGA_SCR_H	21
-#define PSXVGA_SCR_W	78 
-#endif
+/* 640x480 interlace, Spleen 8x16 bitmap font: 80 columns x 30 rows. */
+#define PSXVGA_SCR_H	30
+#define PSXVGA_SCR_W	80
 
 #define PSXVGA_VSCR_H	(PSXVGA_SCR_H)
 #define PSXVGA_VSCR_W	(PSXVGA_SCR_W)
-#define PSXVGA_FNT_H	12
-#define PSXVGA_FNT_W	 8
+#define PSXVGA_FNT_H	16
+#define PSXVGA_FNT_W	8
+
+#define PSXVGA_BG_COLOR		0x000000
+#define PSXVGA_CURSOR_COLOR	0xFFFFFF
 
 
 static unsigned int psxvga_scrbuf[PSXVGA_VSCR_H][PSXVGA_VSCR_W];  //PSX TEXT SCREEN BUFFER
@@ -88,10 +87,8 @@ static const char *psxvga_startup (void)
    psxvga_cury = 0;	
    psxvga_curx = 0;
    
-    mode=0x8000009;
-#ifdef CONFIG_VT_CONSOLE_HIRES 
-    mode=0x800000b;
-#endif    
+    /* GP1(08h): 640 horizontal, 480 vertical, interlace. */
+    mode=0x800002f;
      InitGPU (mode);
    cls ();
    LoadFont ();
@@ -124,7 +121,7 @@ static inline void psxvga_writew2 (unsigned int val, int y, int x)
 {
    if (y < PSXVGA_VSCR_H && x < PSXVGA_VSCR_W)
    {
-	    line(((y*PSXVGA_FNT_H)<<16)+((x*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),0x000100);
+	    line(((y*PSXVGA_FNT_H)<<16)+((x*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),PSXVGA_BG_COLOR);
 	   print2 (x*PSXVGA_FNT_W, y*PSXVGA_FNT_H, val);   
 	   gpu_dma_gpu_idle();                            
       
@@ -180,7 +177,7 @@ static inline void psxvga_memsetw(u16 sx,u16 sy, u16 c, unsigned int count)
 {
    while (count) {
 	   count--;
-	   psxvga_writew2 (c, sy,sx);
+	   psxvga_writew2 (c, sy, sx++);
    }
 }
 
@@ -267,7 +264,7 @@ static void psxvga_cursor(struct vc_data *conp, int mode)
 
 y=psxvga_cury;
 x=psxvga_curx;
-line(((y*PSXVGA_FNT_H)<<16)+(((x)*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),0x000100);
+line(((y*PSXVGA_FNT_H)<<16)+(((x)*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),PSXVGA_BG_COLOR);
     t=y;
       y += psxvga_bottom;
       if (y >= PSXVGA_VSCR_H) y -= PSXVGA_VSCR_H;
@@ -277,7 +274,7 @@ gpu_dma_gpu_idle();
 
 x=conp->vc_x;
 y=conp->vc_y;
-line(((y*PSXVGA_FNT_H)<<16)+((x*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),0x1122FF);
+line(((y*PSXVGA_FNT_H)<<16)+((x*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),PSXVGA_CURSOR_COLOR);
 psxvga_cury=y;
 psxvga_curx=x;
 

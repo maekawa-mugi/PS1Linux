@@ -39,11 +39,11 @@ back2:   END_TAG( 8 )   	# Primitive of gouroud 4 point polygon
       .word  0x38000000    # Type + bgr    top left
 			.short 0,0
       .word  0x00000000   # bgr           top right
-			.short 0,255
+			.short 0,511
       .word  0x00000000    # bgr           bottom left
 			.short 659,0
       .word  0x00000000    # bgr           bottom right
-			.short 659,255
+			.short 659,511
 
 
 			.global	LoadFont
@@ -54,8 +54,8 @@ LoadFont:   subu	sp,sp,4
 			la 		a0,font+64      # transfer image data to VRAM
       li 		a1,320          # x = 320, y = 0
 addu			a1,a1,6*64		#???PSX test shift font
-    	li 		a2,64+(48<<16)	# w = 64, h = 48
-      li 		a3,64*48/2			# anzahl
+    	li 		a2,64+(128<<16)	# w = 64 halfwords (256 px), h = 128
+      li 		a3,64*128/2			# word count
       jal 	 mem2vram
 
       la 		a0,font+20      # transfer clut data to VRAM
@@ -74,7 +74,7 @@ addu			a1,a1,6*64		#???PSX test shift font
 	jr		ra
 	
 			.global	set_tPage
-			.global	putsprite
+			.global	putsprite
 
 #---------- print text -----------------------------------------
 # a0: void *pimitive
@@ -111,10 +111,8 @@ print_inf1:	lbu		a3,(s0)						# Zeichen
 			bnez	v0,no_control
 			lbu	 a1,(s0)					 # new x
 			lbu	 a2,1(s0)					# new y
-			sll	 a1,a1,3					 # x * 8
-			addu	t0,a2,a2					# y * 12
-			addu	t0,t0,a2
-			sll	 a2,t0,2
+			sll	 a1,a1,3					# x * 8
+			sll	 a2,a2,4					# y * 16
 			addu	s0,s0,2
 			j		 print_inf1
 
@@ -134,11 +132,11 @@ print_end:
 			addu		sp,sp,12
 			jr		ra
 
-			.global	line
+			.global	line
 
 #---------- line -----------------------
-# a0: x1
-# a1: y1
+# a0: x1
+# a1: y1
 # a2: x2
 # a3: y2
 line: 
@@ -146,7 +144,7 @@ line:
 	sw		ra,(sp)
 	
 	la		t0,rct1
-	nop
+	nop
 	
 	sh		a0,4(t0)
 	li		t1,16
@@ -157,7 +155,7 @@ line:
 	sh		t2,10(t0)
 
 	la		t0,rct0
-	nop
+	nop
 	lui		t1,0x6000    
 	addu		a2,a2,t1
 	sw		a2,4(t0)
@@ -169,12 +167,12 @@ line:
 #	li		a1,100
 #	li		a2,100
 #	jal	 	print_hex
-#	nop
+#	nop
 
 #------
 	jal	 	SendList
 #	nop
- 	li 	 	a0,1000
+ 	li 	 	a0,1000
 			
 sprp:	 
 	subu 		a0,a0,1
@@ -184,7 +182,7 @@ sprp:
 	addu		sp,sp,4
         jr		ra
 
-			.global	putsprite
+			.global	putsprite
 
 
 #---------- print -----------------------
@@ -213,15 +211,13 @@ print:
       sll	 t0,t0,3				 # * 8
       sb		t0,12(a0)			 # u
       srl	 t0,a3,5
-      addu	t1,t0,t0				# * 2
-      addu	t1,t1,t0				# * 3
-      sll	 t0,t1,2	 			# * 12
+      sll	 t0,t0,4	 			# * 16
       sb		t0,13(a0)	 		# v
 // set clut id      
       li		t0,CLUT_ID( 21, 0, 128 )
       sh		t0,14(a0)
 // set font size
-      li		t0,0x000c0008 	# w, h
+      li		t0,0x00100008 	# w = 8, h = 16
       sw		t0,16(a0)
 
       jr		ra
@@ -240,12 +236,9 @@ print2:     subu	sp,sp,4
       sh		a1,10(t0)       # y
       and	 t1,a2,0x1f
       sll	 t1,t1,3				 # * 8
-addu	t1,t1,0					#???PSX shift font
       sb		t1,12(t0)			 # u
       srl	 t1,a2,5
-      addu	t2,t1,t1				# * 2
-      addu	t2,t2,t1				# * 3
-      sll	 t1,t2,2	 			# * 12
+      sll	 t1,t1,4	 			# * 16
       sb		t1,13(t0)	 		# v
          
 	la		a0,print_prim
@@ -270,10 +263,10 @@ pp1:	END_TAG( 4 )
 			.short	0, 0						 # x, y
 			.byte	 0, 0						// u, v - char decomposition
 			.short	CLUT_ID( 21, 0, 128 )
-			.short	8, 12  					# w, h
+			.short	8, 16  					# w, h
 	.global	rct0
 rct0:	TAG(rct1,1)
-	.word	0x60FF1F33
+	.word	0x60FFFFFF
 rct1:	END_TAG( 2 )
 	.short	100,100 	    		
 	.short	100,100 	    		
