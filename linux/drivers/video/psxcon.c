@@ -44,6 +44,7 @@ static unsigned int psxvga_scrbuf[PSXVGA_VSCR_H][PSXVGA_VSCR_W];  //PSX TEXT SCR
 static int psxvga_cury;				// POINTER TO CURRENT STRING
 static int psxvga_curx;				// POINTER TO CURRENT POSITION IN STR
 static int psxvga_bottom;
+static int psxvga_cursor_visible;
 
 
 /*
@@ -87,12 +88,13 @@ static const char *psxvga_startup (void)
    psxvga_cury = 0;	
    psxvga_curx = 0;
    
-    /* GP1(08h): 640 horizontal, 480 vertical, interlace. */
-    mode=0x800002f;
+    /* GP1(08h): NTSC 640x480 interlace (60 Hz). */
+    mode=0x08000027;
      InitGPU (mode);
    cls ();
    LoadFont ();
     psxvga_bottom = 0;
+    psxvga_cursor_visible = 0;
 
    return  display_desc;
 }
@@ -117,88 +119,87 @@ static void psxvga_deinit(struct vc_data *conp)
 
 }
 
-static inline void psxvga_writew2 (unsigned int val, int y, int x)
+static inline int psxvga_physical_row(int row)
 {
-   if (y < PSXVGA_VSCR_H && x < PSXVGA_VSCR_W)
-   {
-	    line(((y*PSXVGA_FNT_H)<<16)+((x*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),PSXVGA_BG_COLOR);
-	   print2 (x*PSXVGA_FNT_W, y*PSXVGA_FNT_H, val);   
-	   gpu_dma_gpu_idle();                            
-      
-      y += psxvga_bottom;
-      if (y >= PSXVGA_VSCR_H) y -= PSXVGA_VSCR_H;
-      psxvga_scrbuf[y][x] = val;
+   row += psxvga_bottom;
+   if (row >= PSXVGA_VSCR_H)
+      row -= PSXVGA_VSCR_H;
+   return row;
+}
+
+static inline void psxvga_draw_cell(unsigned int val, int y, int x)
+{
+   if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
+      return;
+
+   line(((y * PSXVGA_FNT_H) << 16) | (x * PSXVGA_FNT_W),
+        (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_BG_COLOR);
+   gpu_dma_gpu_idle();
+   if ((val & 0xff) != ' ' && (val & 0xff) != 0) {
+      print2(x * PSXVGA_FNT_W, y * PSXVGA_FNT_H, val & 0xff);
+      gpu_dma_gpu_idle();
    }
 }
 
-static inline void psxvga_printscreen (void)
+static inline void psxvga_writew2(unsigned int val, int y, int x)
 {
-   int x, y, z;
-   
-	cls ();
-	
-	for (y = 0, z = psxvga_bottom; z < PSXVGA_SCR_H; z++, y++) // print top piece of screen
-	{
-      for(x = 0; x < PSXVGA_SCR_W; x++)
-	   {
-	      if (psxvga_scrbuf[z][x] != 0 && psxvga_scrbuf[z][x] != ' ')
-	      {
-	         print2 (x*PSXVGA_FNT_W, y*PSXVGA_FNT_H, psxvga_scrbuf[z][x]);
-	         gpu_dma_gpu_idle();
-	      }
-	   }
+   if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
+      return;
+   psxvga_draw_cell(val, y, x);
+   psxvga_scrbuf[psxvga_physical_row(y)][x] = val;
+}
+
+static inline void psxvga_printscreen(void)
+{
+   int x, y, row;
+
+   cls();
+   gpu_dma_gpu_idle();
+   for (y = 0; y < PSXVGA_SCR_H; y++) {
+      row = psxvga_physical_row(y);
+      for (x = 0; x < PSXVGA_SCR_W; x++) {
+         unsigned int val = psxvga_scrbuf[row][x];
+         if ((val & 0xff) != 0 && (val & 0xff) != ' ') {
+            print2(x * PSXVGA_FNT_W, y * PSXVGA_FNT_H, val & 0xff);
+            gpu_dma_gpu_idle();
+         }
+      }
    }
-
-	for (z = 0; z < psxvga_bottom; z++, y++) // print bottom piece of screen
-	{
-      for (x = 0; x < PSXVGA_SCR_W; x++)
-	   {
-	      if (psxvga_scrbuf[z][x] != 0 && psxvga_scrbuf[z][x] != ' ')
-	      {
-	         print2 (x*PSXVGA_FNT_W, y*PSXVGA_FNT_H, psxvga_scrbuf[z][x]);
-	         gpu_dma_gpu_idle();
-	      }
-	   }
-	}
+   psxvga_cursor_visible = 0;
 }
 
-
-static inline u16 psxvga_readw (u16 addr)
+static inline u16 psxvga_readw(unsigned int addr)
 {
-   int x, y;
-   
-   y = addr/PSXVGA_VSCR_W;
-   x = addr-y*PSXVGA_VSCR_W;
+   int y, x;
 
-   return (u16)psxvga_scrbuf[y][x];
+   if (addr >= PSXVGA_VSCR_H * PSXVGA_VSCR_W)
+      return ' ';
+   y = addr / PSXVGA_VSCR_W;
+   x = addr % PSXVGA_VSCR_W;
+   return (u16)psxvga_scrbuf[psxvga_physical_row(y)][x];
 }
 
-static inline void psxvga_memsetw(u16 sx,u16 sy, u16 c, unsigned int count)
+/* Copy one logical row, preserving overlapping source and destination. */
+static inline void psxvga_memmovew(unsigned int to, unsigned int from, int count)
 {
-   while (count) {
-	   count--;
-	   psxvga_writew2 (c, sy, sx++);
+   int i;
+   unsigned int dst;
+
+   if (to == from || count <= 0)
+      return;
+   if (to < from) {
+      for (i = 0; i < count; i++) {
+         dst = to + i;
+         psxvga_writew2(psxvga_readw(from + i),
+                         dst / PSXVGA_VSCR_W, dst % PSXVGA_VSCR_W);
+      }
+   } else {
+      for (i = count - 1; i >= 0; i--) {
+         dst = to + i;
+         psxvga_writew2(psxvga_readw(from + i),
+                         dst / PSXVGA_VSCR_W, dst % PSXVGA_VSCR_W);
+      }
    }
-}
-
-
-static inline void psxvga_memmovew(u16 to, u16 from, int count)
-{
-/*
-    if (to < from) {
-	while (count) {
-	    count--;
-	    psxvga_writew(psxvga_readw(from++), to++);
-	}
-    } else {
-	from += count;
-	to += count;
-	while (count) {
-	    count--;
-	    psxvga_writew(psxvga_readw(--from), --to);
-	}
-    }
-*/
 }
 
 /* ====================================================================== */
@@ -227,19 +228,28 @@ static inline void psxvga_memmovew(u16 to, u16 from, int count)
  */
 
 static void psxvga_clear(struct vc_data *conp, int sy, int sx, int height,
-			int width)
+                        int width)
 {
+   int x, y;
 
-int y;
- if((sy>PSXVGA_VSCR_H)){}
- else
-  {
- for(y=0;y<height;y++)
-  psxvga_memsetw(sx,(sy+y)*PSXVGA_VSCR_W,' ', width);
-  }
- 
+   if (height <= 0 || width <= 0 || sy < 0 || sx < 0 ||
+       sy >= PSXVGA_VSCR_H || sx >= PSXVGA_VSCR_W)
+      return;
+   if (height > PSXVGA_VSCR_H - sy)
+      height = PSXVGA_VSCR_H - sy;
+   if (width > PSXVGA_VSCR_W - sx)
+      width = PSXVGA_VSCR_W - sx;
+
+   for (y = sy; y < sy + height; y++)
+      for (x = sx; x < sx + width; x++)
+         psxvga_scrbuf[psxvga_physical_row(y)][x] = ' ';
+
+   /* Clear the entire rectangle with one GPU primitive. */
+   line(((sy * PSXVGA_FNT_H) << 16) | (sx * PSXVGA_FNT_W),
+        ((height * PSXVGA_FNT_H) << 16) | (width * PSXVGA_FNT_W),
+        PSXVGA_BG_COLOR);
+   gpu_dma_gpu_idle();
 }
-
 
 static void psxvga_putc(struct vc_data *conp, int c, int ypos, int xpos)
 {
@@ -260,75 +270,115 @@ static void psxvga_putcs(struct vc_data *conp, const unsigned short * s, int cou
 
 
 static void psxvga_cursor(struct vc_data *conp, int mode)
-{int x,y,t;
+{
+   int x, y;
 
-y=psxvga_cury;
-x=psxvga_curx;
-line(((y*PSXVGA_FNT_H)<<16)+(((x)*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),PSXVGA_BG_COLOR);
-    t=y;
-      y += psxvga_bottom;
-      if (y >= PSXVGA_VSCR_H) y -= PSXVGA_VSCR_H;
-    
-print2 ((x)*PSXVGA_FNT_W, (t)*PSXVGA_FNT_H, psxvga_scrbuf[y][x]);
-gpu_dma_gpu_idle();
+   if (psxvga_cursor_visible) {
+      psxvga_draw_cell(psxvga_readw(psxvga_cury * PSXVGA_VSCR_W +
+                                    psxvga_curx), psxvga_cury, psxvga_curx);
+      psxvga_cursor_visible = 0;
+   }
+   if (mode == CM_ERASE)
+      return;
+   if (mode != CM_DRAW && mode != CM_MOVE)
+      return;
 
-x=conp->vc_x;
-y=conp->vc_y;
-line(((y*PSXVGA_FNT_H)<<16)+((x*PSXVGA_FNT_W)),((PSXVGA_FNT_H)<<16)+(PSXVGA_FNT_W),PSXVGA_CURSOR_COLOR);
-psxvga_cury=y;
-psxvga_curx=x;
+   x = conp->vc_x;
+   y = conp->vc_y;
+   if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
+      return;
 
+   line(((y * PSXVGA_FNT_H) << 16) | (x * PSXVGA_FNT_W),
+        (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_CURSOR_COLOR);
+   gpu_dma_gpu_idle();
+   psxvga_cury = y;
+   psxvga_curx = x;
+   psxvga_cursor_visible = 1;
 }
 
-
-
-static int psxvga_scroll(struct vc_data *conp, int t, int b, int dir, int count)
+static int psxvga_scroll(struct vc_data *conp, int t, int b,
+                         int dir, int count)
 {
-   int x, y, i;
-   
-   switch (dir)
-   {
-      case SM_UP:
-		   for (y = psxvga_bottom, i = 0; i < count; i++, y++) {
-            if (y >= PSXVGA_VSCR_H) y = 0;
-		      for (x = 0; x < PSXVGA_VSCR_W; x++)
-		         psxvga_scrbuf[y][x] = 0;
-         }      
-         psxvga_bottom += count;
-	      if (psxvga_bottom >= PSXVGA_VSCR_H)
-            psxvga_bottom -= PSXVGA_VSCR_H;
-            
-         break;
-         
-      case SM_DOWN:
-	 
-         break;
+   int x, y, i, row;
+
+   if (t < 0 || b > PSXVGA_VSCR_H || t >= b || count <= 0)
+      return 0;
+   if (dir != SM_UP && dir != SM_DOWN)
+      return 0;
+   if (count > b - t)
+      count = b - t;
+
+   /* A partial scrolling region cannot use the full-screen ring offset. */
+   if (t != 0 || b != PSXVGA_VSCR_H) {
+      if (dir == SM_UP) {
+         psxvga_bmove(conp, t + count, 0, t, 0, b - t - count,
+                      PSXVGA_VSCR_W);
+         psxvga_clear(conp, b - count, 0, count, PSXVGA_VSCR_W);
+      } else {
+         psxvga_bmove(conp, t, 0, t + count, 0, b - t - count,
+                      PSXVGA_VSCR_W);
+         psxvga_clear(conp, t, 0, count, PSXVGA_VSCR_W);
+      }
+      return 0;
    }
-   
-	psxvga_printscreen ();    
-//	scrup();
+
+   if (dir == SM_UP) {
+      for (i = 0; i < count; i++) {
+         row = psxvga_physical_row(i);
+         for (x = 0; x < PSXVGA_VSCR_W; x++)
+            psxvga_scrbuf[row][x] = ' ';
+      }
+      psxvga_bottom = (psxvga_bottom + count) % PSXVGA_VSCR_H;
+   } else {
+      psxvga_bottom =
+         (psxvga_bottom + PSXVGA_VSCR_H - count) % PSXVGA_VSCR_H;
+      for (i = 0; i < count; i++) {
+         row = psxvga_physical_row(i);
+         for (x = 0; x < PSXVGA_VSCR_W; x++)
+            psxvga_scrbuf[row][x] = ' ';
+      }
+   }
+
+   psxvga_printscreen();
+   /* Return 0 so the VT core also updates its backing screen buffer. */
    return 0;
 }
 
-
 static void psxvga_bmove(struct vc_data *conp, int sy, int sx, int dy, int dx,
-			int height, int width)
+                         int height, int width)
 {
-
    int y;
- if((sy>PSXVGA_VSCR_H)&&(dy>PSXVGA_VSCR_H)){}
- else
-  {
- for(y=0;y<height;y++)
-  psxvga_memmovew(sx+(sy+y)*PSXVGA_VSCR_W,dx+(dy+y)*PSXVGA_VSCR_W , width);
-  }
 
+   if (height <= 0 || width <= 0 || sy < 0 || dy < 0 ||
+       sx < 0 || dx < 0 || sy + height > PSXVGA_VSCR_H ||
+       dy + height > PSXVGA_VSCR_H || sx + width > PSXVGA_VSCR_W ||
+       dx + width > PSXVGA_VSCR_W)
+      return;
+
+   if (dy > sy) {
+      for (y = height - 1; y >= 0; y--)
+         psxvga_memmovew(dx + (dy + y) * PSXVGA_VSCR_W,
+                          sx + (sy + y) * PSXVGA_VSCR_W, width);
+   } else {
+      for (y = 0; y < height; y++)
+         psxvga_memmovew(dx + (dy + y) * PSXVGA_VSCR_W,
+                          sx + (sy + y) * PSXVGA_VSCR_W, width);
+   }
 }
-
 
 static int psxvga_switch(struct vc_data *conp)
 {
-    return 1;
+   int x, y;
+   u16 *screen = (u16 *)conp->vc_origin;
+
+   if (!screen)
+      return 1;
+   psxvga_bottom = 0;
+   for (y = 0; y < PSXVGA_VSCR_H; y++)
+      for (x = 0; x < PSXVGA_VSCR_W; x++)
+         psxvga_scrbuf[y][x] = scr_readw(screen + y * PSXVGA_VSCR_W + x);
+   psxvga_printscreen();
+   return 1;
 }
 
 
@@ -350,17 +400,26 @@ static int psxvga_set_palette(struct vc_data *conp, unsigned char *table)
 
 static u16 *psxvga_screen_pos(struct vc_data *conp, int offset)
 {
-    return (u16 *)(psxvga_cury+offset);
+   return (u16 *)(conp->vc_origin + offset);
 }
 
-static unsigned long psxvga_getxy(struct vc_data *conp, unsigned long pos, int *px, int *py)
-{unsigned long ret;
-    
-    if (px) *px = psxvga_curx;
-    if (py) *py = psxvga_cury;
-    ret = pos + (PSXVGA_VSCR_W - psxvga_curx) * 2; // WARNING !!!!
-    
-    return ret;
+static unsigned long psxvga_getxy(struct vc_data *conp, unsigned long pos,
+                                  int *px, int *py)
+{
+   unsigned long offset;
+   int x, y;
+
+   if (pos < conp->vc_origin || pos >= conp->vc_scr_end) {
+      if (px) *px = 0;
+      if (py) *py = 0;
+      return conp->vc_origin;
+   }
+   offset = (pos - conp->vc_origin) / 2;
+   x = offset % conp->vc_cols;
+   y = offset / conp->vc_cols;
+   if (px) *px = x;
+   if (py) *py = y;
+   return pos + (conp->vc_cols - x) * 2;
 }
 
 static void psxvga_invert_region(struct vc_data *conp, u16 *p, int cnt)
