@@ -299,7 +299,7 @@ static void psxvga_cursor(struct vc_data *conp, int mode)
 static int psxvga_scroll(struct vc_data *conp, int t, int b,
                          int dir, int count)
 {
-   int x, y, i, row;
+   int x, i, row;
 
    if (t < 0 || b > PSXVGA_VSCR_H || t >= b || count <= 0)
       return 0;

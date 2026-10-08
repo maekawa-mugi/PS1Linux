@@ -4,6 +4,11 @@
 #include <asm/ps/gpu.h>
 
 #define	CLUT_ID(page, x, y)	(( page & 0xf ) << 2 )  | (( page & 0x10 ) << 10 ) | ( x >> 4 ) | ( y << 6 )
+
+/* Keep the 4-bit font texture and its CLUT outside the 640x480 display. */
+#define FONT_TEX_X  704
+#define FONT_CLUT_X 704
+#define FONT_CLUT_Y 384
 #define	TAG( adr, size ) 	.word	adr + ( size << 24 )
 #define	END_TAG( size )		.word	0xffffff + ( size << 24 )
 
@@ -52,8 +57,7 @@ LoadFont:   subu	sp,sp,4
 			sw		 ra,(sp)
 			
 			la 		a0,font+64      # transfer image data to VRAM
-      li 		a1,320          # x = 320, y = 0
-addu			a1,a1,6*64		#???PSX test shift font
+      li 		a1,FONT_TEX_X  # x = 704, y = 0 (outside framebuffer)
     	li 		a2,64+(128<<16)	# w = 64 halfwords (256 px), h = 128
       li 		a3,64*128/2			# word count
       jal 	 mem2vram
@@ -64,7 +68,7 @@ addu			a1,a1,6*64		#???PSX test shift font
 #			or		v0,v0,0x8000
 #			sh		v0,(a0)
 			
-      li 		a1,320+(384<<16) # x = 320, y = 384
+      li 		a1,FONT_CLUT_X+(FONT_CLUT_Y<<16) # x = 704, y = 384
       li 		a2,16+(1<<16)		# w = 16, h = 1
       li 		a3,8
       jal 	 mem2vram
@@ -214,7 +218,7 @@ print:
       sll	 t0,t0,4	 			# * 16
       sb		t0,13(a0)	 		# v
 // set clut id      
-      li		t0,CLUT_ID( 21, 0, 128 )
+      li		t0,CLUT_ID( 0, FONT_CLUT_X, FONT_CLUT_Y )
       sh		t0,14(a0)
 // set font size
       li		t0,0x00100008 	# w = 8, h = 16
@@ -262,7 +266,7 @@ pp1:	END_TAG( 4 )
     	.byte	0x80, 0x80, 0x80, 0x64		# rgb, font color
 			.short	0, 0						 # x, y
 			.byte	 0, 0						// u, v - char decomposition
-			.short	CLUT_ID( 21, 0, 128 )
+			.short	CLUT_ID( 0, FONT_CLUT_X, FONT_CLUT_Y )
 			.short	8, 16  					# w, h
 	.global	rct0
 rct0:	TAG(rct1,1)
