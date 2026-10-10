@@ -1009,6 +1009,21 @@ void ext2_read_inode (struct inode * inode)
 	offset &= (EXT2_BLOCK_SIZE(inode->i_sb) - 1);
 	raw_inode = (struct ext2_inode *) (bh->b_data + offset);
 
+#ifdef CONFIG_PLAYSTATION
+	/*
+	 * On the 8 MiB PSX memory card, inode 16 was found with i_size=0
+	 * and i_data[0]=0 although both fields are nonzero in the image.
+	 * Check what bread() returned before touching the in-memory inode.
+	 */
+	if (inode->i_ino == 16)
+		printk(KERN_WARNING
+		       "PSX ext2: ino16 raw block=%lu off=%lu mode=%o size=%lu blk0=%lu\n",
+		       block, offset,
+		       (unsigned int)le16_to_cpu(raw_inode->i_mode),
+		       (unsigned long)le32_to_cpu(raw_inode->i_size),
+		       (unsigned long)le32_to_cpu(raw_inode->i_block[0]));
+#endif
+
 	inode->i_mode = le16_to_cpu(raw_inode->i_mode);
 	inode->i_uid = (uid_t)le16_to_cpu(raw_inode->i_uid_low);
 	inode->i_gid = (gid_t)le16_to_cpu(raw_inode->i_gid_low);
@@ -1055,6 +1070,15 @@ void ext2_read_inode (struct inode * inode)
 	 */
 	for (block = 0; block < EXT2_N_BLOCKS; block++)
 		inode->u.ext2_i.i_data[block] = raw_inode->i_block[block];
+
+#ifdef CONFIG_PLAYSTATION
+	if (inode->i_ino == 16)
+		printk(KERN_WARNING
+		       "PSX ext2: ino16 loaded mode=%o size=%lu blk0=%lu\n",
+		       (unsigned int)inode->i_mode,
+		       (unsigned long)inode->i_size,
+		       (unsigned long)le32_to_cpu(inode->u.ext2_i.i_data[0]));
+#endif
 
 	if (inode->i_ino == EXT2_ACL_IDX_INO ||
 	    inode->i_ino == EXT2_ACL_DATA_INO)
