@@ -32,6 +32,8 @@
 #include <asm/bugs.h>
 
 #ifdef CONFIG_PLAYSTATION
+#include <asm/flat.h>        /* struct flat_hdr, legacy bFLT rev2 */
+
 /* Kernel syscall wrappers supply dup() but not dup2(). */
 extern asmlinkage long sys_dup2(unsigned int oldfd, unsigned int newfd);
 #endif
@@ -771,6 +773,48 @@ static void __init do_basic_setup(void)
 #endif
 }
 
+#ifdef CONFIG_PLAYSTATION
+/*
+ * Diagnose the mounted rootfs without modifying it.  The syscall wrappers
+ * in <asm/unistd.h> return -1 and set errno on failure; save errno before
+ * calling printk or any other kernel function.
+ *
+ * Do not mark this __init: the init thread runs after free_initmem().
+ */
+static void psx_probe_init_file(const char *path)
+{
+	struct flat_hdr hdr;
+	int fd, count, saved_errno;
+
+	fd = open(path, O_RDONLY, 0);
+	if (fd < 0) {
+		saved_errno = errno;
+		printk(KERN_ERR "PSX: probe open(%s) failed: errno=%d\\n",
+		       path, saved_errno);
+		return;
+	}
+
+	printk(KERN_INFO "PSX: probe open(%s) succeeded: fd=%d\\n",
+	       path, fd);
+	count = read(fd, (char *)&hdr, sizeof(hdr));
+	if (count < 0) {
+		saved_errno = errno;
+		printk(KERN_ERR "PSX: probe read(%s) failed: errno=%d\\n",
+		       path, saved_errno);
+	} else if (count != sizeof(hdr)) {
+		printk(KERN_ERR "PSX: probe read(%s): got %d/%d header bytes\\n",
+		       path, count, (int)sizeof(hdr));
+	} else {
+		printk(KERN_INFO
+		       "PSX: probe %s magic=%c%c%c%c rev=%lu entry=%lu text=%lu data=%lu flags=%08lx\\n",
+		       path, hdr.magic[0], hdr.magic[1], hdr.magic[2],
+		       hdr.magic[3], hdr.rev, hdr.entry_point, hdr.text_start,
+		       hdr.data_start, hdr.flags);
+	}
+	(void) close(fd);
+}
+#endif
+
 static int init(void * unused)
 {
 	int console_fd;
@@ -825,6 +869,8 @@ static int init(void * unused)
 	 */
 
 #ifdef CONFIG_PLAYSTATION
+	psx_probe_init_file("/sbin/init");
+
 	/* Report why each PID 1 candidate failed (the MIPS syscall wrapper
 	 * returns -1 and records the kernel errno in the global errno).
 	 * A successful execve never returns.
