@@ -44,6 +44,14 @@
  * Never merge this debug switch into the production branch.
  */
 #define PSXVGA_DIAG_SKIP_SCROLL_REDRAW 0
+/*
+ * Separate the giant gray glyph grid from ordinary per-cell updates.
+ * The stage-8 diagnostic and scroll/switch path all use printscreen(),
+ * which repaints the 23x78 shadow buffer in one burst. Skip that burst
+ * temporarily but leave per-cell clear/putc/putcs, GPU DFE, and PIO
+ * primitive submission exactly as before.
+ */
+#define PSXVGA_DIAG_SKIP_BULK_REPAINT 1
 
 #define PSXVGA_SAFE_MARGIN 8
 #define PSXVGA_SCR_H	23
@@ -380,6 +388,16 @@ static inline void psxvga_writew2(unsigned int val, int y, int x)
 static inline void psxvga_printscreen(void)
 {
    int x, y, row;
+
+#if PSXVGA_DIAG_SKIP_BULK_REPAINT
+   /*
+    * Deliberately do not scroll the visible framebuffer in this test.
+    * Existing glyphs will remain/overlap once scrolling begins.
+    * If the full gray checkerboard disappears, replay of the cached
+    * psxvga_scrbuf is implicated, not just GPU interlace or per-cell IO.
+    */
+   return;
+#endif
 
    /* Do not wipe the 80px logo band when scrolling/redrawing the VT. */
    line((PSX_TEXT_TOP << 16) | PSX_TEXT_LEFT,
