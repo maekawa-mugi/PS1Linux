@@ -170,13 +170,21 @@ line:
 
       li     t3,PSX_HW
       li     t0,0x00ffffff
-      and    t1,a2,t0
+      and    t4,a2,t0
       lui    t0,0x6000
-      or     t1,t1,t0            # GP0(60h) + untextured RGB
-      sw     t1,GPU0(t3)
-      sw     a0,GPU0(t3)         # position (x, y)
-      sw     a1,GPU0(t3)         # dimensions (width, height)
+      or     t4,t4,t0            # GP0(60h) + untextured RGB
 
+      # GPUSTAT bit 26 guarantees readiness for a word, not an entire
+      # multiword packet. Poll before EACH GP0 parameter.
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
+      jal    WaitIdle
+      nop
+      sw     a0,GPU0(t3)         # position (x, y)
+      jal    WaitIdle
+      nop
+      sw     a1,GPU0(t3)         # dimensions (width, height)
       jal    WaitIdle
       nop
 
@@ -251,24 +259,34 @@ print2:     subu	sp,sp,4
       nop
       jal    WaitIdle
       nop
-      li     t2,PSX_HW
-      li     t1,0xE100040B     # 4-bit font at x=704,y=0; DFE=1 for 480i
-      sw     t1,GPU0(t2)
-      la     t0,pp1
-      # pp1 starts with a DMA linked-list header (0x04ffffff).
-      # PIO must SKIP that header and stream the four GPU payload
-      # words only: GP0(64h), XY, UV/CLUT, and width/height.
-      lw     t1,4(t0)          # GP0(64h): textured sprite
-      sw     t1,GPU0(t2)
-      lw     t1,8(t0)          # screen x,y
-      sw     t1,GPU0(t2)
-      lw     t1,12(t0)         # UV and CLUT
-      sw     t1,GPU0(t2)
-      lw     t1,16(t0)         # width, height
-      sw     t1,GPU0(t2)
+      # t3 holds GPU base, t5 the packet base, and t4 the command word.
+      # WaitIdle() uses t0..t2, so all three survive each readiness poll.
+      li     t3,PSX_HW
+      la     t5,pp1
+      li     t4,0xE100040B     # 4-bit font at x=704,y=0; DFE=1 for 480i
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
 
-      # PIO writes are ordered, but ensure the GPU accepted the packet
-      # before another kernel subsystem can touch its command channel.
+      # pp1+0 is the DMA tag. Skip it for PIO and check GPUSTAT bit26
+      # before EVERY payload word, not merely once per four-word sprite.
+      lw     t4,4(t5)          # GP0(64h): textured sprite
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
+      lw     t4,8(t5)          # screen x,y
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
+      lw     t4,12(t5)         # UV and CLUT
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
+      lw     t4,16(t5)         # width, height
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
+
       jal    WaitIdle
       nop
 
