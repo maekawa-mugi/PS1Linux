@@ -1,2 +1,4 @@
 **/_01_2_A_.mcd
 **/NO$PSX.INP
+# Local dependency/configuration snapshot for incremental kernel builds
+/linux/.psx-dep-config
