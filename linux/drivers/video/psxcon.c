@@ -79,6 +79,7 @@ static void psxvga_deinit(struct vc_data *conp);
 static void psxvga_clear(struct vc_data *conp, int sy, int sx, int height,
 		       int width);
 static void psxvga_putc(struct vc_data *conp, int c, int ypos, int xpos);
+static inline void psxvga_printscreen(void);
 static void psxvga_putcs(struct vc_data *conp, const unsigned short *s, int count,
 			int ypos, int xpos);
 static void psxvga_cursor(struct vc_data *conp, int mode);
@@ -249,6 +250,10 @@ void psxvga_debug_boot_stage(int stage)
      *   B only:  original font texture/CLUT became invalid
      *   both:    GPU glyphs work; inspect VT backing/con_putcs updates
      * The y=64 probe is outside Tux and the text area (y>=96).
+     * After the re-upload, repaint the kernel's retained VT shadow.
+     * A square at x608 y64 marks the completion of that redraw.
+     * A glyph C at x544 y112 tests textured sprites inside the
+     * console viewport independent of the VT's text buffer.
      */
     if (stage == 6)
         psxvga_dbg_watch_putcs = 1;
@@ -258,6 +263,12 @@ void psxvga_debug_boot_stage(int stage)
         LoadFont();
         gpu_dma_gpu_idle();
         print2(576, 64, 'B');
+        gpu_dma_gpu_idle();
+        psxvga_printscreen();
+        gpu_dma_gpu_idle();
+        print2(544, 112, 'C');
+        gpu_dma_gpu_idle();
+        line((64 << 16) | 608, (12 << 16) | 16, 0xFFFFFF);
         gpu_dma_gpu_idle();
     }
 }
