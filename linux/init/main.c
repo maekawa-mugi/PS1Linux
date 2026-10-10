@@ -31,6 +31,10 @@
 #include <asm/io.h>
 #include <asm/bugs.h>
 
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+extern void psxvga_debug_boot_stage(int stage);
+#endif
+
 #ifdef CONFIG_PLAYSTATION
 #include <asm/flat.h>        /* struct flat_hdr, legacy bFLT rev2 */
 
@@ -616,6 +620,9 @@ asmlinkage void __init start_kernel(void)
 	 *	make syscalls (and thus be locked).
 	 */
 	smp_init();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(2);
+#endif
 	kernel_thread(init, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGNAL);
 	unlock_kernel();
 	current->need_resched = 1;
@@ -837,8 +844,14 @@ static int init(void * unused)
 {
 	int console_fd;
 
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(3);
+#endif
 	lock_kernel();
 	do_basic_setup();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(4);
+#endif
 
 	/*
 	 * Ok, we have completed the initial bootup, and
@@ -887,6 +900,9 @@ static int init(void * unused)
 	 */
 
 #ifdef CONFIG_PLAYSTATION
+#ifdef CONFIG_GPUPSX_CONSOLE
+	psxvga_debug_boot_stage(5);
+#endif
 	psx_probe_dir("/");
 	psx_probe_dir("/dev");
 	psx_probe_dir("/sbin");

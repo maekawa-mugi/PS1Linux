@@ -159,6 +159,9 @@ static const char *psxvga_startup (void)
 
 static u32 psx_logo_line[PSX_LOGO_WIDTH / 2] __initdata;
 
+/* On this debug branch, display CPU progress without textured glyphs. */
+void psxvga_debug_boot_stage(int stage);
+
 void __init psxvga_draw_boot_logo(void)
 {
     unsigned short colors[16];
@@ -180,6 +183,37 @@ void __init psxvga_draw_boot_logo(void)
         mem2vram(psx_logo_line, ((y + PSX_LOGO_Y) << 16) | PSX_LOGO_X,
                  (1 << 16) | PSX_LOGO_WIDTH, PSX_LOGO_WIDTH / 2);
     }
+    gpu_dma_gpu_idle();
+    psxvga_debug_boot_stage(1);
+}
+
+/*
+ * PCSX-Redux diagnostic milestones drawn with untextured rectangles in
+ * the upper empty band, to the right of the 80x80 Tux. None overlaps
+ * the 78x23 GPU text console (which begins at y=96).
+ *
+ * 1: console/Tux upload completed
+ * 2: start_kernel ready to spawn PID 1
+ * 3: init kernel thread entered
+ * 4: do_basic_setup returned after root mount
+ * 5: PID 1 reached init path lookup after TTY setup
+ *
+ * Keep this in normal text; stage 5 runs after free_initmem().
+ */
+void psxvga_debug_boot_stage(int stage)
+{
+    unsigned int color;
+
+    switch (stage) {
+    case 1: color = 0xFF0000; break;
+    case 2: color = 0x00FF00; break;
+    case 3: color = 0x00FFFF; break;
+    case 4: color = 0x0000FF; break;
+    case 5: color = 0xFFFFFF; break;
+    default: return;
+    }
+    line((40 << 16) | (128 + (stage - 1) * 48),
+         (12 << 16) | 32, color);
     gpu_dma_gpu_idle();
 }
 
