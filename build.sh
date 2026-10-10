@@ -23,8 +23,11 @@ build() {
         need_dep=1
     fi
 
-    # Avoid rebuilding every object by rewriting .config on each run.
-    if [[ ! -f .config ]] || ! cmp -s Config .config; then
+    # oldconfig may legitimately normalize .config, so comparing it
+    # directly to Config would cause a full dependency refresh on each
+    # invocation. Compare the saved input instead.
+    if [[ ! -f .config || ! -f .psx-dep-config ]] ||
+       ! cmp -s Config .psx-dep-config; then
         cp Config .config
         config_changed=1
     fi
