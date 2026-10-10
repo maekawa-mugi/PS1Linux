@@ -31,8 +31,8 @@
 #include <asm/ps/libpsx.h>
 #include <asm/io.h>
 
-/* NTSC 640x480: 80px for the boot logo, 80x25 text console beneath. */
-#define PSXVGA_SCR_H	25
+/* NTSC 640x480: inset 80px boot logo, 80x24 text console beneath. */
+#define PSXVGA_SCR_H	24
 #define PSXVGA_SCR_W	80
 
 #define PSXVGA_VSCR_H	(PSXVGA_SCR_H)
@@ -114,7 +114,17 @@ static const char *psxvga_startup (void)
  */
 #define PSX_LOGO_WIDTH  80
 #define PSX_LOGO_HEIGHT 80
-#define PSX_LOGO_X       8
+/*
+ * Keep the classic kernel logo clear of the top/border overscan region.
+ * No image scaling, and no changes to the working GP1 NTSC timing.
+ */
+#define PSX_LOGO_X      16
+#define PSX_LOGO_Y      16
+#define PSX_TEXT_TOP    (PSX_LOGO_Y + PSX_LOGO_HEIGHT)
+
+#if PSX_TEXT_TOP + PSXVGA_SCR_H * PSXVGA_FNT_H != 480
+#error "PSX 640x480 text and boot logo must fit on screen"
+#endif
 
 static u32 psx_logo_line[PSX_LOGO_WIDTH / 2] __initdata;
 
@@ -136,7 +146,7 @@ void __init psxvga_draw_boot_logo(void)
             psx_logo_line[x] = (u32)colors[pair >> 4] |
                                ((u32)colors[pair & 15] << 16);
         }
-        mem2vram(psx_logo_line, (y << 16) | PSX_LOGO_X,
+        mem2vram(psx_logo_line, ((y + PSX_LOGO_Y) << 16) | PSX_LOGO_X,
                  (1 << 16) | PSX_LOGO_WIDTH, PSX_LOGO_WIDTH / 2);
     }
     gpu_dma_gpu_idle();
@@ -174,13 +184,13 @@ static inline void psxvga_draw_cell(unsigned int val, int y, int x)
    if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
       return;
 
-   line((((y * PSXVGA_FNT_H) + PSX_LOGO_HEIGHT) << 16) |
+   line((((y * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
         (x * PSXVGA_FNT_W),
         (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
    if ((val & 0xff) != ' ' && (val & 0xff) != 0) {
       print2(x * PSXVGA_FNT_W,
-                   y * PSXVGA_FNT_H + PSX_LOGO_HEIGHT, val & 0xff);
+                   y * PSXVGA_FNT_H + PSX_TEXT_TOP, val & 0xff);
       gpu_dma_gpu_idle();
    }
 }
@@ -198,7 +208,7 @@ static inline void psxvga_printscreen(void)
    int x, y, row;
 
    /* Do not wipe the 80px logo band when scrolling/redrawing the VT. */
-   line(PSX_LOGO_HEIGHT << 16,
+   line(PSX_TEXT_TOP << 16,
         ((PSXVGA_SCR_H * PSXVGA_FNT_H) << 16) |
         (PSXVGA_SCR_W * PSXVGA_FNT_W), PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
@@ -208,7 +218,7 @@ static inline void psxvga_printscreen(void)
          unsigned int val = psxvga_scrbuf[row][x];
          if ((val & 0xff) != 0 && (val & 0xff) != ' ') {
             print2(x * PSXVGA_FNT_W,
-                   y * PSXVGA_FNT_H + PSX_LOGO_HEIGHT, val & 0xff);
+                   y * PSXVGA_FNT_H + PSX_TEXT_TOP, val & 0xff);
             gpu_dma_gpu_idle();
          }
       }
@@ -293,7 +303,7 @@ static void psxvga_clear(struct vc_data *conp, int sy, int sx, int height,
          psxvga_scrbuf[psxvga_physical_row(y)][x] = ' ';
 
    /* Clear the entire rectangle with one GPU primitive. */
-   line((((sy * PSXVGA_FNT_H) + PSX_LOGO_HEIGHT) << 16) |
+   line((((sy * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
         (sx * PSXVGA_FNT_W),
         ((height * PSXVGA_FNT_H) << 16) | (width * PSXVGA_FNT_W),
         PSXVGA_BG_COLOR);
@@ -337,7 +347,7 @@ static void psxvga_cursor(struct vc_data *conp, int mode)
    if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
       return;
 
-   line((((y * PSXVGA_FNT_H) + PSX_LOGO_HEIGHT) << 16) |
+   line((((y * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
         (x * PSXVGA_FNT_W),
         (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_CURSOR_COLOR);
    gpu_dma_gpu_idle();
