@@ -33,6 +33,7 @@
 
 #if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
 extern void psxvga_debug_device_stage(int stage);
+extern void psxvga_debug_card_stage(int stage);
 #endif
 
 #define TRUE                  (1)
@@ -214,6 +215,9 @@ static void bu_timeout (unsigned long card) {
 }
 
 static int bu_ready (int card) {
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(5); /* Entered wait for IRQ or timer */
+#endif
    bu_state = BU_WAIT;
    
    init_timer (&bu_timer);
@@ -226,6 +230,9 @@ static int bu_ready (int card) {
       sleep_on (&bu_wait);
    }
    del_timer (&bu_timer);
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(6); /* Woke from wait */
+#endif
    if (bu_state == BU_READY) return 0;
    else return -1;
 }
@@ -596,6 +603,9 @@ start:
 static int bu_check (bu_t * bu) {
 	int status;
    int try = 0;
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(2); /* Entered card handshake */
+#endif
 
 try:
    if (try >= N_CHECKS) {
@@ -606,10 +616,16 @@ try:
    if (bu_sw_init (bu) < 0) return 0;
    
    bu_hw_init ();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(3); /* SIO configured */
+#endif
    
 	do
 	{
       if ((bu->state & 0xf) != 0) {
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+         psxvga_debug_card_stage(4); /* Preparing to wait */
+#endif
          if (bu_ready (bu->bu_request->card) < 0) {
 #ifdef DEBUG
           printk (KERN_ERR DEVICE_NAME ": check operation for card %d timeout: st=0x%x,"
@@ -633,6 +649,9 @@ try:
 	   }		
 	} while (!bu->stop);
    
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(7); /* Card protocol completed */
+#endif
    return 1;
 }
 
@@ -649,6 +668,9 @@ static int bu_read_first_block (int card) {
 	bu_request.card = card;
    bu_request.floor = 0x0;
 	bu.bu_request = &bu_request;
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(1); /* First block read started */
+#endif
 	if (!bu_check (&bu)) {
 		// the block is unreadable, no blocks on the floor 
 #ifdef DEBUG
@@ -658,6 +680,9 @@ static int bu_read_first_block (int card) {
 	}
 	
 	memcpy (first_block.fill, bu_request.buffer, BU_BLK_SIZE);
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(8); /* Card header copied */
+#endif
 	
 	if (first_block.block.id != BU_ID) {
 		// bad card id - card wasn't write properly
@@ -671,6 +696,9 @@ static int bu_read_first_block (int card) {
 	bu_devices[card].first_block.size = first_block.block.size;
 	bu_devices[card].first_block.serial = first_block.block.serial;
 	bu_devices[card].first_block.number = first_block.block.number;
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_card_stage(9); /* Card header valid */
+#endif
 	
 	return 1;
 }

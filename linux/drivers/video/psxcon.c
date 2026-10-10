@@ -269,6 +269,18 @@ void psxvga_debug_device_stage(int stage)
     gpu_dma_gpu_idle();
 }
 
+/* Stage of card block-zero handshake (PCSX-Redux diagnostic only).
+ * Cyan tiles are at x=360..568, y=80..86 in the logo band.
+ */
+void psxvga_debug_card_stage(int stage)
+{
+    if (stage < 1 || stage > 9)
+        return;
+    line((80 << 16) | (360 + (stage - 1) * 24),
+         (6 << 16) | 16, 0x00FFFF);
+    gpu_dma_gpu_idle();
+}
+
 static void psxvga_init(struct vc_data *conp, int init)
 {
 
