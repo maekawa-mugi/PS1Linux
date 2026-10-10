@@ -824,11 +824,36 @@ static int init(void * unused)
 	 * trying to recover a really broken machine.
 	 */
 
+#ifdef CONFIG_PLAYSTATION
+	/* Report why each PID 1 candidate failed (the MIPS syscall wrapper
+	 * returns -1 and records the kernel errno in the global errno).
+	 * A successful execve never returns.
+	 */
+	if (execute_command) {
+		int ret = execve(execute_command, argv_init, envp_init);
+		int err = errno;
+		printk(KERN_ERR "PSX: execve(%s) failed: ret=%d errno=%d\n",
+		       execute_command, ret, err);
+	}
+	{
+		static char * const candidates[] = {
+			"/sbin/init", "/etc/init", "/bin/init", "/bin/sh"
+		};
+		int i;
+		for (i = 0; i < 4; i++) {
+			int ret = execve(candidates[i], argv_init, envp_init);
+			int err = errno;
+			printk(KERN_ERR "PSX: execve(%s) failed: ret=%d errno=%d\n",
+			       candidates[i], ret, err);
+		}
+	}
+#else
 	if (execute_command)
 		execve(execute_command,argv_init,envp_init);
 	execve("/sbin/init",argv_init,envp_init);
 	execve("/etc/init",argv_init,envp_init);
 	execve("/bin/init",argv_init,envp_init);
 	execve("/bin/sh",argv_init,envp_init);
+#endif
 	panic("No init found.  Try passing init= option to kernel.");
 }
