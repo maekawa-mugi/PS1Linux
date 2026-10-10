@@ -240,7 +240,9 @@ void psxvga_debug_boot_stage(int stage)
      * Stage 6: start watching the console's con_putcs calls after init
      * thread enters do_basic_setup. This survives a stalled root mount.
      *
-     * Stage 10 (filesystem_setup completed): render two glyphs directly.
+     * Stage 8 (just before do_initcalls): render two glyphs directly.
+     * Earlier stage was 10 (after filesystem_setup), which is not reached
+     * when the slot-1 probe waits in partition_setup() with no card.
      * 'A' uses the existing font/CLUT, while 'B' is rendered after a
      * second LoadFont() upload. Compare A/B and the green square:
      *   neither: textured sprite pipeline fails late in boot
@@ -250,7 +252,7 @@ void psxvga_debug_boot_stage(int stage)
      */
     if (stage == 6)
         psxvga_dbg_watch_putcs = 1;
-    if (stage == 10) {
+    if (stage == 8) {
         print2(544, 64, 'A');
         gpu_dma_gpu_idle();
         LoadFont();
