@@ -252,7 +252,7 @@ print2:     subu	sp,sp,4
       jal    WaitIdle
       nop
       li     t2,PSX_HW
-      li     t1,0xE100000B     # 4-bit texture page at x=704,y=0
+      li     t1,0xE100040B     # 4-bit font at x=704,y=0; DFE=1 for 480i
       sw     t1,GPU0(t2)
       la     t0,pp1
       lw     t1,0(t0)          # GP0(64h): textured variable-size sprite
