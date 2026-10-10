@@ -246,7 +246,7 @@ print:
 print2:     subu	sp,sp,4
 			sw		ra,(sp)
 			la		t0,pp1
-			
+
       sh		a0,8(t0)				# x
       sh		a1,10(t0)       # y
       and	 t1,a2,0x1f
@@ -254,20 +254,37 @@ print2:     subu	sp,sp,4
       sb		t1,12(t0)			 # u
       srl	 t1,a2,5
       sll	 t1,t1,4	 			# * 16
-      sb		t1,13(t0)	 		# v
-         
-	la		a0,print_prim
-	jal	 SendList
-			
- 		li 	 a0,1000
-			
-ww:	 subu 	a0,a0,1
-			bnez 	a0,ww
-	
+      sb		t1,13(t0)	 	# v
+
+      # PCSX-Redux test: send sprite command words through GP0 PIO
+      # instead of starting a new DMA2 linked-list for every glyph.
+      # Avoid reliance on mutable DMA tags in a shared packet buffer.
+      jal    gpu_dma_gpu_idle
+      nop
+      jal    WaitIdle
+      nop
+      li     t2,PSX_HW
+      li     t1,0xE100000B     # 4-bit texture page at x=704,y=0
+      sw     t1,GPU0(t2)
+      la     t0,pp1
+      lw     t1,0(t0)          # GP0(64h): textured variable-size sprite
+      sw     t1,GPU0(t2)
+      lw     t1,4(t0)          # screen x,y
+      sw     t1,GPU0(t2)
+      lw     t1,8(t0)          # UV and CLUT
+      sw     t1,GPU0(t2)
+      lw     t1,12(t0)         # width, height
+      sw     t1,GPU0(t2)
+
+      # PIO writes are ordered, but ensure the GPU accepted the packet
+      # before another kernel subsystem can touch its command channel.
+      jal    WaitIdle
+      nop
+
 			lw		ra,(sp)
 			addu	sp,sp,4
       jr		ra
-
+      nop
 
 			.global	print_prim
 			

@@ -43,7 +43,7 @@
  * The visual scroll will be incorrect while this is enabled.
  * Never merge this debug switch into the production branch.
  */
-#define PSXVGA_DIAG_SKIP_SCROLL_REDRAW 1
+#define PSXVGA_DIAG_SKIP_SCROLL_REDRAW 0
 
 #define PSXVGA_SAFE_MARGIN 8
 #define PSXVGA_SCR_H	23
@@ -252,8 +252,9 @@ void psxvga_debug_boot_stage(int stage)
      * The y=64 probe is outside Tux and the text area (y>=96).
      * After the re-upload, repaint the kernel's retained VT shadow.
      * A square at x608 y64 marks the completion of that redraw.
-     * A glyph C at x544 y112 tests textured sprites inside the
-     * console viewport independent of the VT's text buffer.
+     * A glyph C at x544 y16 tests sprite rendering after VT replay,
+     * above the console so subsequent scroll cannot erase it.
+     * Glyph D at stage 10 checks the same path after many initcalls.
      */
     if (stage == 6)
         psxvga_dbg_watch_putcs = 1;
@@ -266,9 +267,13 @@ void psxvga_debug_boot_stage(int stage)
         gpu_dma_gpu_idle();
         psxvga_printscreen();
         gpu_dma_gpu_idle();
-        print2(544, 112, 'C');
+        print2(544, 16, 'C');
         gpu_dma_gpu_idle();
         line((64 << 16) | 608, (12 << 16) | 16, 0xFFFFFF);
+        gpu_dma_gpu_idle();
+    }
+    if (stage == 10) {
+        print2(576, 16, 'D');
         gpu_dma_gpu_idle();
     }
 }
@@ -578,7 +583,7 @@ static int psxvga_scroll(struct vc_data *conp, int t, int b,
       }
    }
 
-#ifndef PSXVGA_DIAG_SKIP_SCROLL_REDRAW
+#if !PSXVGA_DIAG_SKIP_SCROLL_REDRAW
    psxvga_printscreen();
 #endif
    /* Return 0 so the VT core also updates its backing screen buffer. */
