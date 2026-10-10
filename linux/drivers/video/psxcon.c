@@ -64,6 +64,10 @@ static int psxvga_curx;				// POINTER TO CURRENT POSITION IN STR
 static int psxvga_bottom;
 static int psxvga_cursor_visible;
 
+/* PCSX-Redux diagnostic: confirm that later printk text reaches con_putcs. */
+static volatile int psxvga_dbg_watch_putcs;
+static int psxvga_dbg_putcs_seen;
+
 
 /*
  *  Interface used by the world
@@ -231,6 +235,29 @@ void psxvga_debug_boot_stage(int stage)
                      : (128 + (stage - 6) * 48);
     line((y << 16) | x, (12 << 16) | 32, color);
     gpu_dma_gpu_idle();
+
+    /*
+     * Stage 6: start watching the console's con_putcs calls after init
+     * thread enters do_basic_setup. This survives a stalled root mount.
+     *
+     * Stage 10 (filesystem_setup completed): render two glyphs directly.
+     * 'A' uses the existing font/CLUT, while 'B' is rendered after a
+     * second LoadFont() upload. Compare A/B and the green square:
+     *   neither: textured sprite pipeline fails late in boot
+     *   B only:  original font texture/CLUT became invalid
+     *   both:    GPU glyphs work; inspect VT backing/con_putcs updates
+     * The y=64 probe is outside Tux and the text area (y>=96).
+     */
+    if (stage == 6)
+        psxvga_dbg_watch_putcs = 1;
+    if (stage == 10) {
+        print2(544, 64, 'A');
+        gpu_dma_gpu_idle();
+        LoadFont();
+        gpu_dma_gpu_idle();
+        print2(576, 64, 'B');
+        gpu_dma_gpu_idle();
+    }
 }
 
 /*
@@ -449,6 +476,16 @@ static void psxvga_putcs(struct vc_data *conp, const unsigned short * s, int cou
 		       int ypos, int xpos)
 {
    int i;
+
+   /*
+    * A green square proves that VT passed new glyphs through con_putcs
+    * after do_basic_setup() started. This has no font dependency.
+    */
+   if (psxvga_dbg_watch_putcs && !psxvga_dbg_putcs_seen && count > 0) {
+      psxvga_dbg_putcs_seen = 1;
+      line((64 << 16) | 464, (12 << 16) | 16, 0x00FF00);
+      gpu_dma_gpu_idle();
+   }
 
    for (i = 0; i < count; i++)
 	{
