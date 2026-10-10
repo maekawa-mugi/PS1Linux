@@ -789,24 +789,24 @@ static void psx_probe_init_file(const char *path)
 	fd = open(path, O_RDONLY, 0);
 	if (fd < 0) {
 		saved_errno = errno;
-		printk(KERN_ERR "PSX: probe open(%s) failed: errno=%d\\n",
+		printk(KERN_ERR "PSX: probe open(%s) failed: errno=%d\n",
 		       path, saved_errno);
 		return;
 	}
 
-	printk(KERN_INFO "PSX: probe open(%s) succeeded: fd=%d\\n",
+	printk(KERN_INFO "PSX: probe open(%s) succeeded: fd=%d\n",
 	       path, fd);
 	count = read(fd, (char *)&hdr, sizeof(hdr));
 	if (count < 0) {
 		saved_errno = errno;
-		printk(KERN_ERR "PSX: probe read(%s) failed: errno=%d\\n",
+		printk(KERN_ERR "PSX: probe read(%s) failed: errno=%d\n",
 		       path, saved_errno);
-	} else if (count != sizeof(hdr)) {
-		printk(KERN_ERR "PSX: probe read(%s): got %d/%d header bytes\\n",
+	} else if (count != (int)sizeof(hdr)) {
+		printk(KERN_ERR "PSX: probe read(%s): got %d/%d header bytes\n",
 		       path, count, (int)sizeof(hdr));
 	} else {
 		printk(KERN_INFO
-		       "PSX: probe %s magic=%c%c%c%c rev=%lu entry=%lu text=%lu data=%lu flags=%08lx\\n",
+		       "PSX: probe %s magic=%c%c%c%c rev=%lu entry=%lu text=%lu data=%lu flags=%08lx\n",
 		       path, hdr.magic[0], hdr.magic[1], hdr.magic[2],
 		       hdr.magic[3], hdr.rev, hdr.entry_point, hdr.text_start,
 		       hdr.data_start, hdr.flags);
