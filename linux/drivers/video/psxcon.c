@@ -100,6 +100,98 @@ static const char *psxvga_startup (void)
 }
 
 
+
+/*
+ * Colour Tux startup overlay. It uses the existing GPU rectangle primitive
+ * without altering the validated 80x30 text-console layout. Normal console
+ * redraws may overwrite this one-shot logo.
+ */
+#define PSX_TUX_WIDTH 32
+#define PSX_TUX_HEIGHT 40
+#define PSX_TUX_X (640 - PSX_TUX_WIDTH * 2 - 8)
+#define PSX_TUX_Y 8
+
+static const char psx_tux_rows[PSX_TUX_HEIGHT][PSX_TUX_WIDTH + 1] = {
+    "................................",
+    "................................",
+    "................................",
+    "..............ggggg.............",
+    "............ggkkkkkgg...........",
+    "..........ggkkkkkkkkkgg.........",
+    ".........ggkkkkkkkkkkkgg........",
+    ".........gkkkkkkkkkkkkkg........",
+    "........gkkwwkkkkkkwwkkkg.......",
+    "........gkwwwwkkkkwwwwkkg.......",
+    ".......gkwwwpwwkkwwwpwwkkg......",
+    ".......gkwwpppwkkwwpppwkkg......",
+    ".......gkwwpppwkkwwpppwkkg......",
+    "......ggkwwwpwwkkwwwpwwkkgg.....",
+    "......ggkkwwwwkkkkwwwwkkkgg.....",
+    "......ggkkkwwkkkkkkwwkkkkgg.....",
+    ".....ggkkkkkyyyyyyyyykkkkkgg....",
+    "....ogkkgkkkkYYYYYYYkkkkgkkg....",
+    "....ogkkkkkkwwyyyyywwkkkkkkg....",
+    "...oogkkkgkwwwwyyywwwwkgkkkgo...",
+    "...oogkkkkwwwwwwywwwwwwkkkkgo...",
+    "..ooogkkkkwwwwwwwwwwwwwkkkkgoo..",
+    "..ooogkkkkwwwwwwwwwwwwwkkkkgoo..",
+    "..ooogkkkwwwwwwwwwwwwwwwkkkgoo..",
+    "..ooogkkkwwwwwwwwwwwwwwwkkkgoo..",
+    "..ooogkkkwwwwwwwwwwwwwwwkkkgoo..",
+    "..oooogkkwwwwwwwwwwwwwwwkkgooo..",
+    "..oooogkkwwwwwwwwwwwwwwwkkgooo..",
+    "...ooogkkwwwwwwwwwwwwwwwkkgoo...",
+    "...oooogkkwwwwwwwwwwwwwkkgooo...",
+    "....ooogkkwwwwwwwwwwwwwkkgoo....",
+    "....oooogkwwwwwwwwwwwwwkgooo....",
+    ".....ooookkwwwwwwwwwwwkkooo.....",
+    "......ffffkkwwwwwwwwwkkffff.....",
+    "....fffffffkkwwwwwwwkkfffffff...",
+    "...fffffffffkkwwwwwkkfffffffff..",
+    "...fffffffffffkkkkkfffffffffff..",
+    "....fffffffffff...fffffffffff...",
+    "......fffffff.......fffffff.....",
+    "................................",
+};
+
+void psxvga_draw_boot_logo(void)
+{
+    int y, x, end;
+    unsigned int color;
+    char shade;
+
+    for (y = 0; y < PSX_TUX_HEIGHT; ++y) {
+        x = 0;
+        while (x < PSX_TUX_WIDTH) {
+            shade = psx_tux_rows[y][x];
+            if (shade == '.') {
+                ++x;
+                continue;
+            }
+            end = x + 1;
+            while (end < PSX_TUX_WIDTH && psx_tux_rows[y][end] == shade)
+                ++end;
+
+            switch (shade) {
+            case 'g': color = 0x00787878; break;
+            case 'k': color = 0x0026262a; break;
+            case 'o': color = 0x009b9b9b; break;
+            case 'w': color = 0x00f4f4f4; break;
+            case 'p': color = 0x00101010; break;
+            case 'y': color = 0x0024aeff; break;
+            case 'Y': color = 0x005edeff; break;
+            case 'f': color = 0x0012b1ff; break;
+            default: color = 0x00ffffff; break;
+            }
+
+            line(((PSX_TUX_Y + y * 2) << 16) | (PSX_TUX_X + x * 2),
+                 (2 << 16) | ((end - x) * 2), color);
+            gpu_dma_gpu_idle();
+            x = end;
+        }
+    }
+}
+
 static void psxvga_init(struct vc_data *conp, int init)
 {
 

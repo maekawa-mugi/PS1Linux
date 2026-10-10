@@ -2147,7 +2147,7 @@ static kdev_t vt_console_device(struct console *c)
 }
 
 struct console vt_console_driver = {
-	name:		"ttyS",			//???PSX   "tty"
+	name:		"tty",
 	write:		vt_console_print,
 	device:		vt_console_device,
 	wait_key:	keyboard_wait_for_keypress,
