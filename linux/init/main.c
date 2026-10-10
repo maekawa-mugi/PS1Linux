@@ -781,6 +781,24 @@ static void __init do_basic_setup(void)
  *
  * Do not mark this __init: the init thread runs after free_initmem().
  */
+/*
+ * Pinpoint which VFS path component is inaccessible on the mounted root.
+ * Avoid reading directories as regular files; only test open/close.
+ */
+static void psx_probe_dir(const char *path)
+{
+	int fd = open(path, O_RDONLY, 0);
+	if (fd < 0) {
+		int err = errno;
+		printk(KERN_ERR "PSX: probe directory %s: open failed errno=%d\n",
+		       path, err);
+		return;
+	}
+	printk(KERN_INFO "PSX: probe directory %s: open OK fd=%d\n",
+	       path, fd);
+	(void) close(fd);
+}
+
 static void psx_probe_init_file(const char *path)
 {
 	struct flat_hdr hdr;
@@ -869,6 +887,9 @@ static int init(void * unused)
 	 */
 
 #ifdef CONFIG_PLAYSTATION
+	psx_probe_dir("/");
+	psx_probe_dir("/dev");
+	psx_probe_dir("/sbin");
 	psx_probe_init_file("/sbin/init");
 
 	/* Report why each PID 1 candidate failed (the MIPS syscall wrapper
