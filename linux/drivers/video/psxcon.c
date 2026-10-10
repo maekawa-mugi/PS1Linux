@@ -203,6 +203,7 @@ void __init psxvga_draw_boot_logo(void)
 void psxvga_debug_boot_stage(int stage)
 {
     unsigned int color;
+    int x, y;
 
     switch (stage) {
     case 1: color = 0xFF0000; break;
@@ -210,10 +211,25 @@ void psxvga_debug_boot_stage(int stage)
     case 3: color = 0x00FFFF; break;
     case 4: color = 0x0000FF; break;
     case 5: color = 0xFFFFFF; break;
+    /* Second row traces do_basic_setup() in chronological order. */
+    case 6: color = 0xFF00FF; break;
+    case 7: color = 0xFFFF00; break;
+    case 8: color = 0x00FFFF; break;
+    case 9: color = 0x8080FF; break;
+    case 10: color = 0xFF8000; break;
+    case 11: color = 0x80FF80; break;
+    case 12: color = 0xFFFFFF; break;
     default: return;
     }
-    line((40 << 16) | (128 + (stage - 1) * 48),
-         (12 << 16) | 32, color);
+    /*
+     * Row one: stages 1..5 at y=40.
+     * Row two: stages 6..12 at y=64.
+     * Both stay inside the 0..96 boot header, clear of the Tux.
+     */
+    y = (stage <= 5) ? 40 : 64;
+    x = (stage <= 5) ? (128 + (stage - 1) * 48)
+                     : (128 + (stage - 6) * 48);
+    line((y << 16) | x, (12 << 16) | 32, color);
     gpu_dma_gpu_idle();
 }
 

@@ -673,6 +673,11 @@ static void __init do_basic_setup(void)
 	int real_root_mountflags;
 #endif
 
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(6);
+#endif
+
+
 	/*
 	 * Tell the world that we're going to be the grim
 	 * reaper of innocent orphaned children.
@@ -733,6 +738,9 @@ static void __init do_basic_setup(void)
 
 	/* Networking initialization needs a process context */ 
 	sock_init();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(7);
+#endif
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	real_root_dev = ROOT_DEV;
@@ -742,10 +750,20 @@ static void __init do_basic_setup(void)
 #endif
 
 	start_context_thread();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(8);
+#endif
 	do_initcalls();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(9);
+#endif
+
 
 	/* .. filesystems .. */
 	filesystem_setup();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(10);
+#endif
 
 #ifdef CONFIG_IRDA
 	irda_device_init(); /* Must be done after protocol initialization */
@@ -756,8 +774,15 @@ static void __init do_basic_setup(void)
 
 	/* Mount the root filesystem.. */
 	mount_root();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(11);
+#endif
 
 	mount_devfs_fs ();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_boot_stage(12);
+#endif
+
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	root_mountflags = real_root_mountflags;
