@@ -31,6 +31,11 @@
 #include <asm/io.h>
 #include <asm/bugs.h>
 
+#ifdef CONFIG_PLAYSTATION
+/* Kernel syscall wrappers supply dup() but not dup2(). */
+extern asmlinkage long sys_dup2(unsigned int oldfd, unsigned int newfd);
+#endif
+
 #ifdef CONFIG_PCI
 #include <linux/pci.h>
 #endif
@@ -798,12 +803,17 @@ static int init(void * unused)
 	if (console_fd < 0)
 		printk("Warning: unable to open an initial console (%d).\n", console_fd);
 	else {
+#ifdef CONFIG_PLAYSTATION
 		if (console_fd != 0) {
-			(void) dup2(console_fd, 0);
+			(void) sys_dup2(console_fd, 0);
 			(void) close(console_fd);
 		}
-		(void) dup2(0, 1);
-		(void) dup2(0, 2);
+		(void) sys_dup2(0, 1);
+		(void) sys_dup2(0, 2);
+#else
+		(void) dup(0);
+		(void) dup(0);
+#endif
 	}
 
 	
