@@ -37,6 +37,14 @@
  * 23 rows from scanline 96 use 368px: bottom 16px is left unused.
  * Preserve the proved-safe Tux origin at (8,16).
  */
+/*
+ * PCSX-Redux diagnostic only. Suppress the full-screen GPU redraw
+ * performed on VT scroll so we can tell whether it erases kernel text.
+ * The visual scroll will be incorrect while this is enabled.
+ * Never merge this debug switch into the production branch.
+ */
+#define PSXVGA_DIAG_SKIP_SCROLL_REDRAW 1
+
 #define PSXVGA_SAFE_MARGIN 8
 #define PSXVGA_SCR_H	23
 #define PSXVGA_SCR_W	78
@@ -422,7 +430,9 @@ static int psxvga_scroll(struct vc_data *conp, int t, int b,
       }
    }
 
+#ifndef PSXVGA_DIAG_SKIP_SCROLL_REDRAW
    psxvga_printscreen();
+#endif
    /* Return 0 so the VT core also updates its backing screen buffer. */
    return 0;
 }
