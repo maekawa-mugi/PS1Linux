@@ -12,6 +12,40 @@ full_build=0
 # if their ordering fails on a given toolchain, use --jobs 1.
 jobs=$(( $(nproc) * 2 ))
 
+
+# Print the checkout revision only after make AND elf2psx have succeeded.
+# This reports the source tree used by the build, not a Git ID embedded in
+# the resulting executable. The remote comparison is against cached refs;
+# it cannot verify that GitHub has no newer commits without a git fetch.
+show_build_revision() {
+    local branch commit remote_commit
+    commit=$(git -C "$SCRIPT_DIR" rev-parse --verify HEAD)
+    branch=$(git -C "$SCRIPT_DIR" symbolic-ref --quiet --short HEAD || printf 'DETACHED')
+
+    printf '\n============================================================\n'
+    printf 'PS1Linux: build and PS-EXE conversion completed successfully\n'
+    printf 'Output: %s\n' "$SCRIPT_DIR/bin/kernel.exe"
+    printf 'Built checkout branch: %s\n' "$branch"
+    printf 'Built checkout commit: %s\n' "$commit"
+
+    if [[ "$branch" != DETACHED ]]; then
+        remote_commit=$(git -C "$SCRIPT_DIR" rev-parse --verify "refs/remotes/origin/$branch^{commit}" 2>/dev/null || true)
+        if [[ -n "$remote_commit" ]]; then
+            printf 'Cached origin/%s: %s\n' "$branch" "$remote_commit"
+            if [[ "$commit" != "$remote_commit" ]]; then
+                printf 'WARNING: checkout differs from cached origin/%s\n' "$branch"
+            fi
+        else
+            printf 'Remote check: origin/%s not fetched locally\n' "$branch"
+        fi
+    fi
+    printf 'NOTE: Remote status is cached; run git fetch to check for new pushes.\n'
+    if ! git -C "$SCRIPT_DIR" diff --quiet HEAD -- build.sh linux; then
+        printf 'WARNING: tracked source changes are uncommitted (revision alone is insufficient).\n'
+    fi
+    printf '============================================================\n'
+}
+
 build() {
     local config_changed=0
     local need_dep=0
@@ -54,6 +88,7 @@ build() {
     make -j"$jobs" 2>&1 | tee "$SCRIPT_DIR/build.log"
     cd "$SCRIPT_DIR"
     tools/elf2psx/elf2psx -p linux/linux bin/kernel.exe
+    show_build_revision
 }
 
 delete() {
