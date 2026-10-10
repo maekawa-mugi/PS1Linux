@@ -72,6 +72,21 @@ static int psxvga_curx;				// POINTER TO CURRENT POSITION IN STR
 static int psxvga_bottom;
 static int psxvga_cursor_visible;
 
+/* First visible VT scroll diagnostics, no font/glyph dependencies. */
+static int psxvga_diag_first_scroll;
+static int psxvga_diag_trace_repaint;
+static int psxvga_diag_repaint_glyphs;
+
+static void psxvga_diag_scroll_mark(int milestone, unsigned int color)
+{
+   if (milestone < 1 || milestone > 7)
+      return;
+   /* All markers are in the top unused band, to the right of Tux. */
+   line((8 << 16) | (152 + (milestone - 1) * 36),
+        (10 << 16) | 24, color);
+   gpu_dma_gpu_idle();
+}
+
 /* PCSX-Redux diagnostic: confirm that later printk text reaches con_putcs. */
 static volatile int psxvga_dbg_watch_putcs;
 static int psxvga_dbg_putcs_seen;
@@ -404,6 +419,8 @@ static inline void psxvga_printscreen(void)
         ((PSXVGA_SCR_H * PSXVGA_FNT_H) << 16) |
         (PSXVGA_SCR_W * PSXVGA_FNT_W), PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
+   if (psxvga_diag_trace_repaint)
+      psxvga_diag_scroll_mark(3, 0xFF0000); /* clear completed */
    for (y = 0; y < PSXVGA_SCR_H; y++) {
       row = psxvga_physical_row(y);
       for (x = 0; x < PSXVGA_SCR_W; x++) {
@@ -412,10 +429,23 @@ static inline void psxvga_printscreen(void)
             print2(PSX_TEXT_LEFT + x * PSXVGA_FNT_W,
                    y * PSXVGA_FNT_H + PSX_TEXT_TOP, val & 0xff);
             gpu_dma_gpu_idle();
+            if (psxvga_diag_trace_repaint) {
+               psxvga_diag_repaint_glyphs++;
+               if (psxvga_diag_repaint_glyphs == 1)
+                  psxvga_diag_scroll_mark(4, 0x00FF00);
+               if (psxvga_diag_repaint_glyphs == 64)
+                  psxvga_diag_scroll_mark(5, 0xFFFF00);
+               if (psxvga_diag_repaint_glyphs == 256)
+                  psxvga_diag_scroll_mark(6, 0xFF00FF);
+            }
          }
       }
    }
    psxvga_cursor_visible = 0;
+   if (psxvga_diag_trace_repaint) {
+      psxvga_diag_scroll_mark(7, 0xFFFFFF);
+      psxvga_diag_trace_repaint = 0;
+   }
 }
 
 static inline u16 psxvga_readw(unsigned int addr)
@@ -562,6 +592,21 @@ static int psxvga_scroll(struct vc_data *conp, int t, int b,
                          int dir, int count)
 {
    int x, i, row;
+
+   if (!psxvga_diag_first_scroll) {
+      int cached = 0;
+      int yy, xx;
+      psxvga_diag_first_scroll = 1;
+      psxvga_diag_scroll_mark(1, 0x0000FF); /* VT invoked con_scroll */
+      for (yy = 0; yy < PSXVGA_VSCR_H; yy++)
+         for (xx = 0; xx < PSXVGA_VSCR_W; xx++)
+            if ((psxvga_scrbuf[yy][xx] & 0xff) > ' ')
+               cached++;
+      /* green if the retained text buffer has at least 64 glyphs */
+      psxvga_diag_scroll_mark(2, cached >= 64 ? 0x00FF00 : 0x0000FF);
+      if (t == 0 && b == PSXVGA_VSCR_H)
+         psxvga_diag_trace_repaint = 1;
+   }
 
    if (t < 0 || b > PSXVGA_VSCR_H || t >= b || count <= 0)
       return 0;
