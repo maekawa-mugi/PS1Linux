@@ -225,10 +225,17 @@ static int bu_ready (int card) {
    bu_timer.data = NULL;
    bu_timer.expires = jiffies+bu_devices[card].timeout;
    add_timer (&bu_timer);
-   // check - may be we lose interrupt ?
-   if (bu_state != BU_READY) {
-      sleep_on (&bu_wait);
-   }
+   /*
+    * sleep_on() can miss an interrupt between checking bu_state and
+    * registering with the wait queue. A fast SIO implementation can
+    * trigger the IRQ in exactly that window. wait_event() installs
+    * the waiter before re-checking the condition, and also handles
+    * BU_TIMEOUT from bu_timeout().
+    *
+    * PCSX-Redux experimental fix; keep on the debug branch until
+    * it has been tested against NO$PSX and the real console.
+    */
+   wait_event (bu_wait, bu_state != BU_WAIT);
    del_timer (&bu_timer);
 #if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
    psxvga_debug_card_stage(6); /* Woke from wait */
