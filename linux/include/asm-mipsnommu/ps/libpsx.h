@@ -18,6 +18,8 @@ void print2( int, int, char );
 void gpu_dma_gpu_idle( void );
 // waits for GPU's DMA idle
 void gpu_dma_idle( void );
+/* GP0(80h) VRAM copy: packed source XY, destination XY, size HW. */
+void psxvga_copy_vram(int src_xy, int dst_xy, int size_hw);
 void line (int xy, int hw, int col);
 extern char rct1;
 

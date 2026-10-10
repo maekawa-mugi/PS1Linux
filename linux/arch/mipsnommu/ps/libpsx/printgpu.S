@@ -193,6 +193,38 @@ line:
       jr     ra
       nop
 
+/*
+ * GP0(80h) VRAM-to-VRAM copy, for 8x16 GPU-console scanline strips.
+ * a0 = src (y<<16|x), a1 = dst, a2 = dimensions (h<<16|w).
+ * Keep all four GP0 words on the same PIO path as print2()/line().
+ */
+            .global psxvga_copy_vram
+psxvga_copy_vram:
+      subu   sp,sp,4
+      sw     ra,0(sp)
+      jal    gpu_dma_gpu_idle
+      nop
+      li     t3,PSX_HW
+      li     t4,0x80000000
+      jal    WaitIdle
+      nop
+      sw     t4,GPU0(t3)
+      jal    WaitIdle
+      nop
+      sw     a0,GPU0(t3)
+      jal    WaitIdle
+      nop
+      sw     a1,GPU0(t3)
+      jal    WaitIdle
+      nop
+      sw     a2,GPU0(t3)
+      jal    WaitIdle
+      nop
+      lw     ra,0(sp)
+      addu   sp,sp,4
+      jr     ra
+      nop
+
 			.global	putsprite
 
 

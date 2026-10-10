@@ -72,7 +72,7 @@ static int psxvga_curx;				// POINTER TO CURRENT POSITION IN STR
 static int psxvga_bottom;
 static int psxvga_cursor_visible;
 
-/* First visible VT scroll diagnostics, no font/glyph dependencies. */
+/* First VT scroll debug stages 3..7 now only apply to repaint, not VRAM-copy scroll. */
 static int psxvga_diag_first_scroll;
 static int psxvga_diag_trace_repaint;
 static int psxvga_diag_repaint_glyphs;
@@ -709,7 +709,36 @@ static int psxvga_scroll(struct vc_data *conp, int t, int b,
    psxvga_diag_late_mark(2, psxvga_diag_count_shadow() >= 64 ?
                              0x00FF00 : 0xFF0000);
 #if !PSXVGA_DIAG_SKIP_SCROLL_REDRAW
-   psxvga_printscreen();
+   if (dir == SM_UP) {
+      /*
+       * For the usual full-screen upward scroll, copy completed pixels
+       * rather than clearing 624x368 then resending up to 1794 glyphs.
+       * Each 16-pixel row is a separate VRAM copy, so even emulators
+       * without overlapping-blit support can copy safely.
+       */
+      if (count < PSXVGA_VSCR_H) {
+         for (i = 0; i < PSXVGA_VSCR_H - count; i++) {
+            int from_y = PSX_TEXT_TOP + (i + count) * PSXVGA_FNT_H;
+            int to_y = PSX_TEXT_TOP + i * PSXVGA_FNT_H;
+            psxvga_copy_vram((from_y << 16) | PSX_TEXT_LEFT,
+                             (to_y << 16) | PSX_TEXT_LEFT,
+                             (PSXVGA_FNT_H << 16) |
+                               (PSXVGA_VSCR_W * PSXVGA_FNT_W));
+         }
+      }
+      line(((PSX_TEXT_TOP +
+              (PSXVGA_VSCR_H - count) * PSXVGA_FNT_H) << 16) |
+                PSX_TEXT_LEFT,
+           ((count * PSXVGA_FNT_H) << 16) |
+                (PSXVGA_VSCR_W * PSXVGA_FNT_W),
+           PSXVGA_BG_COLOR);
+      gpu_dma_gpu_idle();
+      /* The 3..7 first-repaint milestones no longer apply on this path. */
+      psxvga_diag_trace_repaint = 0;
+   } else {
+      /* Keep the proven fallback for reverse scrolling in this test. */
+      psxvga_printscreen();
+   }
 #endif
    /* Return 0 so the VT core also updates its backing screen buffer. */
    return 0;
