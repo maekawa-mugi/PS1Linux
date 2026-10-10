@@ -76,6 +76,51 @@ static int psxvga_cursor_visible;
 static int psxvga_diag_first_scroll;
 static int psxvga_diag_trace_repaint;
 static int psxvga_diag_repaint_glyphs;
+static unsigned int psxvga_diag_scroll_count;
+
+/*
+ * Continuous diagnostics, right of the existing seven first-scroll
+ * markers. All tiles are in the y=8 header band, outside the VT.
+ *
+ * 0 x416 : PSX shadow buffer occupancy (green >=64, blue <64)
+ * 1 x452 : Linux VT RAM buffer occupancy (green >=64, blue <64)
+ * 2 x488 : PSX shadow occupancy AFTER shifting the ring
+ * 3 x524 : 23 or more scroll calls have completed (white)
+ * 4 x560 : VT requested a full-screen clear (red)
+ * 5 x596 : VT called con_switch after the first scroll (magenta)
+ *
+ * These tiles persist when the console text vanishes.
+ */
+static void psxvga_diag_late_mark(int tile, unsigned int color)
+{
+   if (tile < 0 || tile > 5)
+      return;
+   line((8 << 16) | (416 + tile * 36),
+        (10 << 16) | 24, color);
+   gpu_dma_gpu_idle();
+}
+
+static int psxvga_diag_count_shadow(void)
+{
+   int x, y, count = 0;
+   for (y = 0; y < PSXVGA_VSCR_H; y++)
+      for (x = 0; x < PSXVGA_VSCR_W; x++)
+         if ((psxvga_scrbuf[y][x] & 0xff) > ' ')
+            count++;
+   return count;
+}
+
+static int psxvga_diag_count_vt(struct vc_data *conp)
+{
+   int i, count = 0;
+   const unsigned short *cells = conp->vc_screenbuf;
+   if (!cells)
+      return -1;
+   for (i = 0; i < PSXVGA_VSCR_H * PSXVGA_VSCR_W; i++)
+      if ((scr_readw(cells + i) & 0xff) > ' ')
+         count++;
+   return count;
+}
 
 static void psxvga_diag_scroll_mark(int milestone, unsigned int color)
 {
@@ -524,6 +569,10 @@ static void psxvga_clear(struct vc_data *conp, int sy, int sx, int height,
       for (x = sx; x < sx + width; x++)
          psxvga_scrbuf[psxvga_physical_row(y)][x] = ' ';
 
+   if (psxvga_diag_first_scroll && sy == 0 && sx == 0 &&
+       height == PSXVGA_VSCR_H && width == PSXVGA_VSCR_W)
+      psxvga_diag_late_mark(4, 0x0000FF);
+
    /* Clear the entire rectangle with one GPU primitive. */
    line((((sy * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
         (PSX_TEXT_LEFT + sx * PSXVGA_FNT_W),
@@ -615,6 +664,17 @@ static int psxvga_scroll(struct vc_data *conp, int t, int b,
    if (count > b - t)
       count = b - t;
 
+   psxvga_diag_scroll_count++;
+   psxvga_diag_late_mark(0, psxvga_diag_count_shadow() >= 64 ?
+                             0x00FF00 : 0xFF0000);
+   {
+      int vt_count = psxvga_diag_count_vt(conp);
+      psxvga_diag_late_mark(1, vt_count >= 64 ?
+                                0x00FF00 : 0xFF0000);
+   }
+   if (psxvga_diag_scroll_count >= PSXVGA_VSCR_H)
+      psxvga_diag_late_mark(3, 0xFFFFFF);
+
    /* A partial scrolling region cannot use the full-screen ring offset. */
    if (t != 0 || b != PSXVGA_VSCR_H) {
       if (dir == SM_UP) {
@@ -646,6 +706,8 @@ static int psxvga_scroll(struct vc_data *conp, int t, int b,
       }
    }
 
+   psxvga_diag_late_mark(2, psxvga_diag_count_shadow() >= 64 ?
+                             0x00FF00 : 0xFF0000);
 #if !PSXVGA_DIAG_SKIP_SCROLL_REDRAW
    psxvga_printscreen();
 #endif
@@ -680,6 +742,8 @@ static int psxvga_switch(struct vc_data *conp)
    int x, y;
    u16 *screen = (u16 *)conp->vc_origin;
 
+   if (psxvga_diag_first_scroll)
+      psxvga_diag_late_mark(5, 0xFF00FF);
    if (!screen)
       return 1;
    psxvga_bottom = 0;
