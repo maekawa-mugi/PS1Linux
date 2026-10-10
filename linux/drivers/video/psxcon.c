@@ -51,7 +51,7 @@
  * temporarily but leave per-cell clear/putc/putcs, GPU DFE, and PIO
  * primitive submission exactly as before.
  */
-#define PSXVGA_DIAG_SKIP_BULK_REPAINT 1
+#define PSXVGA_DIAG_SKIP_BULK_REPAINT 0
 
 #define PSXVGA_SAFE_MARGIN 8
 #define PSXVGA_SCR_H	23

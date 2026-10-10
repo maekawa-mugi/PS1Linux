@@ -255,13 +255,16 @@ print2:     subu	sp,sp,4
       li     t1,0xE100040B     # 4-bit font at x=704,y=0; DFE=1 for 480i
       sw     t1,GPU0(t2)
       la     t0,pp1
-      lw     t1,0(t0)          # GP0(64h): textured variable-size sprite
+      # pp1 starts with a DMA linked-list header (0x04ffffff).
+      # PIO must SKIP that header and stream the four GPU payload
+      # words only: GP0(64h), XY, UV/CLUT, and width/height.
+      lw     t1,4(t0)          # GP0(64h): textured sprite
       sw     t1,GPU0(t2)
-      lw     t1,4(t0)          # screen x,y
+      lw     t1,8(t0)          # screen x,y
       sw     t1,GPU0(t2)
-      lw     t1,8(t0)          # UV and CLUT
+      lw     t1,12(t0)         # UV and CLUT
       sw     t1,GPU0(t2)
-      lw     t1,12(t0)         # width, height
+      lw     t1,16(t0)         # width, height
       sw     t1,GPU0(t2)
 
       # PIO writes are ordered, but ensure the GPU accepted the packet
