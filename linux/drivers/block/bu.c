@@ -99,6 +99,13 @@ static int bu_catch (int card, int checks, int timeout) {
 static void bu_interrupt (int irq, void * dev_id, struct pt_regs * regs) {
    int status;
    unsigned long flags;
+#ifdef CONFIG_PLAYSTATION
+   /* Trace physical PS1 card frames around the 8KiB header boundary.
+    * Ext2 inode 16 is stored in physical frame 63 in the 8-frame-offset
+    * card layout. Limit output to a single capture per frame.
+    */
+   static unsigned int trace_frames_seen;
+#endif
 
    if (bu_current < 0) {
 #ifdef DEBUG
@@ -130,6 +137,32 @@ static void bu_interrupt (int irq, void * dev_id, struct pt_regs * regs) {
 	   if (bu_curr.stop) {
          del_timer (&bu_timer);
          if (CURRENT->cmd == READ) {
+#ifdef CONFIG_PLAYSTATION
+            /*
+             * Log bytes as returned by the SIO card protocol, before the
+             * block cache receives them. Frames 62/63/64 straddle the
+             * inode 16 failure, without altering any on-card data.
+             */
+            if (bu_curr_request.card == 0 &&
+                bu_curr_request.block >= 62 &&
+                bu_curr_request.block <= 64) {
+               unsigned int bit = 1U << (bu_curr_request.block - 62);
+               if (!(trace_frames_seen & bit)) {
+                  trace_frames_seen |= bit;
+                  printk(KERN_WARNING
+                         "PSX bu: frame=%u bytes=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                         (unsigned int)bu_curr_request.block,
+                         (unsigned int)bu_curr_request.buffer[0],
+                         (unsigned int)bu_curr_request.buffer[1],
+                         (unsigned int)bu_curr_request.buffer[2],
+                         (unsigned int)bu_curr_request.buffer[3],
+                         (unsigned int)bu_curr_request.buffer[4],
+                         (unsigned int)bu_curr_request.buffer[5],
+                         (unsigned int)bu_curr_request.buffer[6],
+                         (unsigned int)bu_curr_request.buffer[7]);
+               }
+            }
+#endif
             memcpy (CURRENT->buffer+(bu_step << BU_BLK_SHIFT), bu_curr_request.buffer, BU_BLK_SIZE);
          }
          bu_step++;
