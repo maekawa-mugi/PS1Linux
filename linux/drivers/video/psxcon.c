@@ -118,7 +118,7 @@ static const char *psxvga_startup (void)
  * Keep the classic kernel logo clear of the top/border overscan region.
  * No image scaling, and no changes to the working GP1 NTSC timing.
  */
-#define PSX_LOGO_X      16
+#define PSX_LOGO_X       8
 #define PSX_LOGO_Y      16
 #define PSX_TEXT_TOP    (PSX_LOGO_Y + PSX_LOGO_HEIGHT)
 
