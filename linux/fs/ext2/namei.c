@@ -66,9 +66,19 @@ static struct buffer_head * ext2_find_entry (struct inode * dir,
 	struct buffer_head * bh_read[NAMEI_RA_SIZE];
 	unsigned long offset;
 	int block, toread, i, err;
+#ifdef CONFIG_PLAYSTATION
+	int trace_init = (namelen == 4 && !memcmp(name, "init", 4));
+	int trace_count = 0;
+#endif
 
 	*res_dir = NULL;
 	sb = dir->i_sb;
+#ifdef CONFIG_PLAYSTATION
+	if (trace_init)
+		printk(KERN_INFO "PSX ext2: find init dirino=%lu size=%lu blk0=%lu\n",
+		       dir->i_ino, (unsigned long)dir->i_size,
+		       (unsigned long)le32_to_cpu(dir->u.ext2_i.i_data[0]));
+#endif
 
 	if (namelen > EXT2_NAME_LEN)
 		return NULL;
@@ -82,6 +92,10 @@ static struct buffer_head * ext2_find_entry (struct inode * dir,
 			break;
 		bh = ext2_getblk (dir, block, 0, &err);
 		bh_use[block] = bh;
+#ifdef CONFIG_PLAYSTATION
+		if (trace_init && block == 0 && !bh)
+			printk(KERN_WARNING "PSX ext2: init directory block 0 missing err=%d\n", err);
+#endif
 		if (bh && !buffer_uptodate(bh))
 			bh_read[toread++] = bh;
 	}
@@ -106,6 +120,10 @@ static struct buffer_head * ext2_find_entry (struct inode * dir,
 			continue;
 		}
 		wait_on_buffer (bh);
+#ifdef CONFIG_PLAYSTATION
+		if (trace_init && !buffer_uptodate(bh))
+			printk(KERN_WARNING "PSX ext2: init block not uptodate block=%d\n", block);
+#endif
 		if (!buffer_uptodate(bh)) {
 			/*
 			 * read error: all bets are off
@@ -119,6 +137,17 @@ static struct buffer_head * ext2_find_entry (struct inode * dir,
 			/* this code is executed quadratically often */
 			/* do minimal checking `by hand' */
 			int de_len;
+#ifdef CONFIG_PLAYSTATION
+			if (trace_init && trace_count++ < 5)
+				printk(KERN_INFO "PSX ext2: dirent off=%lu ino=%lu reclen=%u namelen=%u bytes=%02x %02x %02x %02x\n",
+				       offset, (unsigned long)le32_to_cpu(de->inode),
+				       (unsigned int)le16_to_cpu(de->rec_len),
+				       (unsigned int)de->name_len,
+				       (unsigned int)(unsigned char)de->name[0],
+				       (unsigned int)(unsigned char)de->name[1],
+				       (unsigned int)(unsigned char)de->name[2],
+				       (unsigned int)(unsigned char)de->name[3]);
+#endif
 
 			if ((char *) de + namelen <= dlimit &&
 			    ext2_match (namelen, name, de)) {
@@ -132,6 +161,11 @@ static struct buffer_head * ext2_find_entry (struct inode * dir,
 						brelse (bh_use[i]);
 				}
 				*res_dir = de;
+#ifdef CONFIG_PLAYSTATION
+				if (trace_init)
+					printk(KERN_INFO "PSX ext2: init found inode=%lu\n",
+					       (unsigned long)le32_to_cpu(de->inode));
+#endif
 				return bh;
 			}
 			/* prevent looping on a bad block */
@@ -155,6 +189,10 @@ static struct buffer_head * ext2_find_entry (struct inode * dir,
 	}
 
 failure:
+#ifdef CONFIG_PLAYSTATION
+	if (trace_init)
+		printk(KERN_WARNING "PSX ext2: init lookup ended without entry\n");
+#endif
 	for (i = 0; i < NAMEI_RA_SIZE; ++i)
 		brelse (bh_use[i]);
 	return NULL;
