@@ -768,6 +768,8 @@ static void __init do_basic_setup(void)
 
 static int init(void * unused)
 {
+	int console_fd;
+
 	lock_kernel();
 	do_basic_setup();
 
@@ -779,11 +781,30 @@ static int init(void * unused)
 	free_initmem();
 	unlock_kernel();
 
- if (open("/dev/console", O_RDWR, 0) < 0)
-    printk("Warning: unable to open an initial console.\n");
-
-	(void) dup(0);
-	(void) dup(0);
+	/* Prefer the configured /dev/console; fall back to the GPU VT on PS1. */
+	console_fd = open("/dev/console", O_RDWR, 0);
+#ifdef CONFIG_PLAYSTATION
+	if (console_fd < 0) {
+		printk(KERN_WARNING "PSX: /dev/console open failed (%d), trying /dev/tty1\n",
+		       console_fd);
+		console_fd = open("/dev/tty1", O_RDWR, 0);
+	}
+	if (console_fd < 0) {
+		printk(KERN_WARNING "PSX: /dev/tty1 open failed (%d), trying /dev/tty0\n",
+		       console_fd);
+		console_fd = open("/dev/tty0", O_RDWR, 0);
+	}
+#endif
+	if (console_fd < 0)
+		printk("Warning: unable to open an initial console (%d).\n", console_fd);
+	else {
+		if (console_fd != 0) {
+			(void) dup2(console_fd, 0);
+			(void) close(console_fd);
+		}
+		(void) dup2(0, 1);
+		(void) dup2(0, 2);
+	}
 
 	
 	/*

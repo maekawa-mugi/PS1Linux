@@ -176,6 +176,13 @@ def read_tree(root: Path, include_default_devs: bool) -> Node:
         if "null" not in existing:
             dev.children.append(Node(path="dev/null", name="null", kind="char",
                                      mode=S_IFCHR | 0o666, rdev=old_kdev(1, 3)))
+        # Linux VT devices for the visible PlayStation GPU console.
+        if "tty0" not in existing:
+            dev.children.append(Node(path="dev/tty0", name="tty0", kind="char",
+                                     mode=S_IFCHR | 0o600, rdev=old_kdev(4, 0)))
+        if "tty1" not in existing:
+            dev.children.append(Node(path="dev/tty1", name="tty1", kind="char",
+                                     mode=S_IFCHR | 0o600, rdev=old_kdev(4, 1)))
         dev.children.sort(key=lambda n: n.name)
         root_node.children.sort(key=lambda n: n.name)
 
@@ -550,7 +557,7 @@ def main(argv: List[str]) -> int:
     p.add_argument("--number", type=parse_int, default=0,
                    help="joined-card sequence number; default kernel config ignores it, large-card mode expects 0,1,...")
     p.add_argument("--inode-count", type=parse_int, default=128, help="inodes in generated ext2 image")
-    p.add_argument("--no-default-devs", action="store_true", help="do not auto-add /dev/console and /dev/null")
+    p.add_argument("--no-default-devs", action="store_true", help="do not auto-add /dev/console, /dev/null, /dev/tty0 and /dev/tty1")
     p.add_argument("--dev", action="append", default=[], help="add device node: /path:c|b:major:minor:mode, e.g. /dev/ttyS0:c:4:64:0600")
     args = p.parse_args(argv)
 
