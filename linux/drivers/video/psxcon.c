@@ -233,6 +233,26 @@ void psxvga_debug_boot_stage(int stage)
     gpu_dma_gpu_idle();
 }
 
+/*
+ * PCSX-Redux-only initcall trace. Draw tiny 5x6 status tiles immediately
+ * below the seven kernel-setup milestones, still above text y=96.
+ * Each initcall paints red before invocation and green on return.
+ * The first tile that remains red is the stalled callback.
+ * The first row encodes calls 1..80, the second 81..160.
+ */
+void psxvga_debug_initcall_progress(unsigned int index, int finished)
+{
+    unsigned int color;
+    int x, y;
+    if (index >= 160)
+        return;
+    x = 128 + (index % 80) * 6;
+    y = (index < 80) ? 80 : 88;
+    color = finished ? 0x00FF00 : 0x0000FF;
+    line((y << 16) | x, (6 << 16) | 5, color);
+    gpu_dma_gpu_idle();
+}
+
 static void psxvga_init(struct vc_data *conp, int init)
 {
 

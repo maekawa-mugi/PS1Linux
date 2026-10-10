@@ -33,6 +33,7 @@
 
 #if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
 extern void psxvga_debug_boot_stage(int stage);
+extern void psxvga_debug_initcall_progress(unsigned int index, int finished);
 #endif
 
 #ifdef CONFIG_PLAYSTATION
@@ -649,10 +650,20 @@ struct task_struct *child_reaper = &init_task;
 static void __init do_initcalls(void)
 {
 	initcall_t *call;
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	unsigned int initcall_index = 0;
+#endif
 
 	call = &__initcall_start;
 	do {
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+		psxvga_debug_initcall_progress(initcall_index, 0);
+#endif
 		(*call)();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+		psxvga_debug_initcall_progress(initcall_index, 1);
+		initcall_index++;
+#endif
 		call++;
 	} while (call < &__initcall_end);
 
