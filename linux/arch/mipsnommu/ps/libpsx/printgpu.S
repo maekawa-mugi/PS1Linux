@@ -147,55 +147,43 @@ print_end:
 			addu		sp,sp,12
 			jr		ra
 
-			.global	line
+            .global line
 
-#---------- line -----------------------
-# a0: x1
-# a1: y1
-# a2: x2
-# a3: y2
-line: 
-	subu		sp,sp,4
-	sw		ra,(sp)
-	
-	la		t0,rct1
-	nop
-	
-	sh		a0,4(t0)
-	li		t1,16
-	srl		t2,a0,t1
-	sh		t2,6(t0)			
-	sh		a1,8(t0)
-	srl		t2,a1,t1
-	sh		t2,10(t0)
+#---------- line (untextured variable-size GPU rectangle) ----------
+# a0: (y << 16) | x
+# a1: (height << 16) | width
+# a2: RGB888 (low 24 bits)
+#
+# PCSX-Redux diagnosis: send the rectangle over GP0 PIO, just like the
+# textured glyphs in print2. Mixing DMA2 linked-list rectangles with GP0
+# PIO glyphs can interleave commands if DMA mode/queue synchronization
+# differs between emulators. Sending both in the same stream also makes
+# the full console background clear deterministic.
+line:
+      subu   sp,sp,4
+      sw     ra,0(sp)
 
-	la		t0,rct0
-	nop
-	lui		t1,0x6000    
-	addu		a2,a2,t1
-	sw		a2,4(t0)
-	
-	la		a0,rct0
-#------
-#	lw		a0,4(a0)
-#	
-#	li		a1,100
-#	li		a2,100
-#	jal	 	print_hex
-#	nop
+      jal    gpu_dma_gpu_idle
+      nop
+      jal    WaitIdle
+      nop
 
-#------
-	jal	 	SendList
-#	nop
- 	li 	 	a0,1000
-			
-sprp:	 
-	subu 		a0,a0,1
-	bnez 		a0,sprp
-	
-	lw		ra,(sp)
-	addu		sp,sp,4
-        jr		ra
+      li     t3,PSX_HW
+      li     t0,0x00ffffff
+      and    t1,a2,t0
+      lui    t0,0x6000
+      or     t1,t1,t0            # GP0(60h) + untextured RGB
+      sw     t1,GPU0(t3)
+      sw     a0,GPU0(t3)         # position (x, y)
+      sw     a1,GPU0(t3)         # dimensions (width, height)
+
+      jal    WaitIdle
+      nop
+
+      lw     ra,0(sp)
+      addu   sp,sp,4
+      jr     ra
+      nop
 
 			.global	putsprite
 
