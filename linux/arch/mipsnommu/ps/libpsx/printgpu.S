@@ -73,6 +73,17 @@ LoadFont:   subu	sp,sp,4
       li 		a3,8
       jal 	 mem2vram
 
+      # GP0(01h) invalidates the texture cache after the font and CLUT
+      # uploads. GP1(01h) used by mem2vram resets commands instead.
+      # Synchronize first so renderers see the freshly loaded glyphs.
+      jal    gpu_dma_gpu_idle
+      nop
+      jal    WaitGPU
+      nop
+      li     t2,PSX_HW
+      li     t1,0x01000000
+      sw     t1,GPU0(t2)
+
 	lw		ra,(sp)
 	addu	sp,sp,4
 	jr		ra
