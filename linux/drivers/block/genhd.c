@@ -25,6 +25,9 @@ extern void DAC960_Initialize(void);
 #endif
 extern int net_dev_init(void);
 extern void console_map_init(void);
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+extern void psxvga_debug_device_stage(int stage);
+#endif
 extern int soc_probe(void);
 extern int atmdev_init(void);
 extern int i2o_init(void);
@@ -33,11 +36,20 @@ extern void ieee1394_init(void);
 
 void __init device_init(void)
 {
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_device_stage(1);
+#endif
 #ifdef CONFIG_PARPORT
 	parport_init();
 #endif
 	chr_dev_init();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_device_stage(2);
+#endif
 	blk_dev_init();
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_device_stage(11);
+#endif
 	sti();
 #ifdef CONFIG_I2O
 	i2o_init();
@@ -63,5 +75,8 @@ void __init device_init(void)
 #endif
 #ifdef CONFIG_VT
 	console_map_init();
+#endif
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	psxvga_debug_device_stage(12);
 #endif
 }

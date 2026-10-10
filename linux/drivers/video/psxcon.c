@@ -253,6 +253,22 @@ void psxvga_debug_initcall_progress(unsigned int index, int finished)
     gpu_dma_gpu_idle();
 }
 
+/*
+ * PCSX-Redux device_init diagnostic only. The first five milestones
+ * occupy x=128..352 at y=40. These extra 12 squares use x=360..618
+ * in the same 80px-high logo band, never touching the VT or Tux.
+ * Each square persists so a stopped device/IRQ path remains visible.
+ */
+void psxvga_debug_device_stage(int stage)
+{
+    int x;
+    if (stage < 1 || stage > 12)
+        return;
+    x = 360 + (stage - 1) * 22;
+    line((40 << 16) | x, (12 << 16) | 16, 0xFFFFFF);
+    gpu_dma_gpu_idle();
+}
+
 static void psxvga_init(struct vc_data *conp, int init)
 {
 

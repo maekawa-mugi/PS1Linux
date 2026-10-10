@@ -31,6 +31,10 @@
 
 #include "bu.h"
 
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+extern void psxvga_debug_device_stage(int stage);
+#endif
+
 #define TRUE                  (1)
 #define FALSE                 (0)
 
@@ -852,6 +856,10 @@ static struct block_device_operations bu_fops =
 
 int __init bu_init (void) {
    int i, bu_size = 0, n = 0;
+   int first_block_ok;
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_device_stage(3);
+#endif
 
 #ifdef CONFIG_PSX_LARGE_CARD
    if (register_blkdev (MAJOR_NR, "bul", &bu_fops)) {
@@ -893,17 +901,34 @@ int __init bu_init (void) {
       return i;
    }
    
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+   psxvga_debug_device_stage(4);  /* request_irq returned success */
+#endif
+
    // check of card existence
    for (i = 0, bu_total = 0, n = 0; i < BU_MINORS; i++) {
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+      if (i == 0) psxvga_debug_device_stage(5);
+      if (i == 1) psxvga_debug_device_stage(8);
+#endif
       printk (KERN_INFO DEVICE_NAME ": detecting card in slot %d ...\n", i+1);
       if (!bu_catch (i, N_CHECKS, CATCH_TIMEOUT)) {
          printk (KERN_ERR DEVICE_NAME ": can't catch card in slot %d\n", i+1);
          continue;
       }
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+      if (i == 0) psxvga_debug_device_stage(6);
+      if (i == 1) psxvga_debug_device_stage(9);
+#endif
       bu_current = i;
       bu_state = BU_NONE;
       bu_open = TRUE;
-		if (!bu_read_first_block (i)) {    
+      first_block_ok = bu_read_first_block(i);
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+      if (i == 0) psxvga_debug_device_stage(7);
+      if (i == 1) psxvga_debug_device_stage(10);
+#endif
+		if (!first_block_ok) {    
          printk (KERN_INFO DEVICE_NAME ": card in slot %d not found\n", i+1);
          bu_sizes[i] = 0;
       }
