@@ -31,9 +31,15 @@
 #include <asm/ps/libpsx.h>
 #include <asm/io.h>
 
-/* NTSC 640x480: inset 80px boot logo, 80x24 text console beneath. */
-#define PSXVGA_SCR_H	24
-#define PSXVGA_SCR_W	80
+/*
+ * NTSC 640x480i. Keep the 8x16 text cells inside a safe viewport.
+ * 78 columns use 624px: 8px at both left and right.
+ * 23 rows from scanline 96 use 368px: bottom 16px is left unused.
+ * Preserve the proved-safe Tux origin at (8,16).
+ */
+#define PSXVGA_SAFE_MARGIN 8
+#define PSXVGA_SCR_H	23
+#define PSXVGA_SCR_W	78
 
 #define PSXVGA_VSCR_H	(PSXVGA_SCR_H)
 #define PSXVGA_VSCR_W	(PSXVGA_SCR_W)
@@ -120,10 +126,27 @@ static const char *psxvga_startup (void)
  */
 #define PSX_LOGO_X       8
 #define PSX_LOGO_Y      16
+#define PSX_TEXT_LEFT   PSXVGA_SAFE_MARGIN
 #define PSX_TEXT_TOP    (PSX_LOGO_Y + PSX_LOGO_HEIGHT)
 
-#if PSX_TEXT_TOP + PSXVGA_SCR_H * PSXVGA_FNT_H != 480
-#error "PSX 640x480 text and boot logo must fit on screen"
+/*
+ * The boot logo and every text primitive must stay inside the
+ * overscan-safe rectangle, without ever touching the logo area.
+ */
+#if PSX_LOGO_X < PSXVGA_SAFE_MARGIN || PSX_LOGO_Y < PSXVGA_SAFE_MARGIN
+#error "PSX Tux origin must be inside the safe display margin"
+#endif
+#if PSX_LOGO_X + PSX_LOGO_WIDTH > 640 - PSXVGA_SAFE_MARGIN
+#error "PSX Tux must not reach the right overscan area"
+#endif
+#if PSX_TEXT_TOP < PSX_LOGO_Y + PSX_LOGO_HEIGHT
+#error "PSX text console overlaps Tux"
+#endif
+#if PSX_TEXT_LEFT + PSXVGA_SCR_W * PSXVGA_FNT_W > 640 - PSXVGA_SAFE_MARGIN
+#error "PSX text console extends into horizontal overscan"
+#endif
+#if PSX_TEXT_TOP + PSXVGA_SCR_H * PSXVGA_FNT_H > 480 - PSXVGA_SAFE_MARGIN
+#error "PSX text console extends into bottom overscan"
 #endif
 
 static u32 psx_logo_line[PSX_LOGO_WIDTH / 2] __initdata;
@@ -185,11 +208,11 @@ static inline void psxvga_draw_cell(unsigned int val, int y, int x)
       return;
 
    line((((y * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
-        (x * PSXVGA_FNT_W),
+        (PSX_TEXT_LEFT + x * PSXVGA_FNT_W),
         (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
    if ((val & 0xff) != ' ' && (val & 0xff) != 0) {
-      print2(x * PSXVGA_FNT_W,
+      print2(PSX_TEXT_LEFT + x * PSXVGA_FNT_W,
                    y * PSXVGA_FNT_H + PSX_TEXT_TOP, val & 0xff);
       gpu_dma_gpu_idle();
    }
@@ -208,7 +231,7 @@ static inline void psxvga_printscreen(void)
    int x, y, row;
 
    /* Do not wipe the 80px logo band when scrolling/redrawing the VT. */
-   line(PSX_TEXT_TOP << 16,
+   line((PSX_TEXT_TOP << 16) | PSX_TEXT_LEFT,
         ((PSXVGA_SCR_H * PSXVGA_FNT_H) << 16) |
         (PSXVGA_SCR_W * PSXVGA_FNT_W), PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
@@ -217,7 +240,7 @@ static inline void psxvga_printscreen(void)
       for (x = 0; x < PSXVGA_SCR_W; x++) {
          unsigned int val = psxvga_scrbuf[row][x];
          if ((val & 0xff) != 0 && (val & 0xff) != ' ') {
-            print2(x * PSXVGA_FNT_W,
+            print2(PSX_TEXT_LEFT + x * PSXVGA_FNT_W,
                    y * PSXVGA_FNT_H + PSX_TEXT_TOP, val & 0xff);
             gpu_dma_gpu_idle();
          }
@@ -304,7 +327,7 @@ static void psxvga_clear(struct vc_data *conp, int sy, int sx, int height,
 
    /* Clear the entire rectangle with one GPU primitive. */
    line((((sy * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
-        (sx * PSXVGA_FNT_W),
+        (PSX_TEXT_LEFT + sx * PSXVGA_FNT_W),
         ((height * PSXVGA_FNT_H) << 16) | (width * PSXVGA_FNT_W),
         PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
@@ -348,7 +371,7 @@ static void psxvga_cursor(struct vc_data *conp, int mode)
       return;
 
    line((((y * PSXVGA_FNT_H) + PSX_TEXT_TOP) << 16) |
-        (x * PSXVGA_FNT_W),
+        (PSX_TEXT_LEFT + x * PSXVGA_FNT_W),
         (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_CURSOR_COLOR);
    gpu_dma_gpu_idle();
    psxvga_cury = y;
