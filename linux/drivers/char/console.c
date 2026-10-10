@@ -2372,6 +2372,10 @@ static int console_refcount;
 
 DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
 
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+extern void __init psxvga_draw_boot_logo(void);
+#endif
+
 void __init con_init(void)
 {     
 	const char *display_desc = NULL;
@@ -2448,6 +2452,10 @@ void __init con_init(void)
 	gotoxy(currcons,x,y);
 	csi_J(currcons, 0);
 	update_screen(fg_console);
+#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
+	/* Paint Tux before replaying the early kernel log. */
+	psxvga_draw_boot_logo();
+#endif
 	printk("Console: %s %s %dx%d",
 		can_do_color ? "colour" : "mono",
 		display_desc, video_num_columns, video_num_lines);

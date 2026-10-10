@@ -766,10 +766,6 @@ static void __init do_basic_setup(void)
 #endif
 }
 
-#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
-extern void psxvga_draw_boot_logo(void);
-#endif
-
 static int init(void * unused)
 {
 	lock_kernel();
@@ -789,10 +785,6 @@ static int init(void * unused)
 	(void) dup(0);
 	(void) dup(0);
 
-#if defined(CONFIG_PLAYSTATION) && defined(CONFIG_GPUPSX_CONSOLE)
-	/* The console and rootfs are ready; show the boot logo. */
-	psxvga_draw_boot_logo();
-#endif
 	
 	/*
 	 * We try each of these until one succeeds.

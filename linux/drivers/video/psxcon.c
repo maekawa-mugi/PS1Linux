@@ -24,11 +24,15 @@
 #include <linux/smp.h>
 #include <linux/init.h>
 
+/* Import the 16-colour version of the kernel's own 80x80 logo. */
+#define INCLUDE_LINUX_LOGO16
+#include <linux/linux_logo.h>
+
 #include <asm/ps/libpsx.h>
 #include <asm/io.h>
 
-/* 640x480 interlace, Spleen 8x16 bitmap font: 80 columns x 30 rows. */
-#define PSXVGA_SCR_H	30
+/* NTSC 640x480: 80px for the boot logo, 80x25 text console beneath. */
+#define PSXVGA_SCR_H	25
 #define PSXVGA_SCR_W	80
 
 #define PSXVGA_VSCR_H	(PSXVGA_SCR_H)
@@ -101,95 +105,41 @@ static const char *psxvga_startup (void)
 
 
 
+
 /*
- * Colour Tux startup overlay. It uses the existing GPU rectangle primitive
- * without altering the validated 80x30 text-console layout. Normal console
- * redraws may overwrite this one-shot logo.
+ * Render the original Linux Tux logo already shipped in linux_logo.h.
+ * Its 80x80 16-colour pixels use two palette indexes per source byte.
+ * Convert them to PS1 native RGB555 and transfer one GPU scanline at a
+ * time. The temporary data and source logo are freed after init.
  */
-#define PSX_TUX_WIDTH 32
-#define PSX_TUX_HEIGHT 40
-#define PSX_TUX_X (640 - PSX_TUX_WIDTH * 2 - 8)
-#define PSX_TUX_Y 8
+#define PSX_LOGO_WIDTH  80
+#define PSX_LOGO_HEIGHT 80
+#define PSX_LOGO_X       8
 
-static const char psx_tux_rows[PSX_TUX_HEIGHT][PSX_TUX_WIDTH + 1] = {
-    "................................",
-    "................................",
-    "................................",
-    "..............ggggg.............",
-    "............ggkkkkkgg...........",
-    "..........ggkkkkkkkkkgg.........",
-    ".........ggkkkkkkkkkkkgg........",
-    ".........gkkkkkkkkkkkkkg........",
-    "........gkkwwkkkkkkwwkkkg.......",
-    "........gkwwwwkkkkwwwwkkg.......",
-    ".......gkwwwpwwkkwwwpwwkkg......",
-    ".......gkwwpppwkkwwpppwkkg......",
-    ".......gkwwpppwkkwwpppwkkg......",
-    "......ggkwwwpwwkkwwwpwwkkgg.....",
-    "......ggkkwwwwkkkkwwwwkkkgg.....",
-    "......ggkkkwwkkkkkkwwkkkkgg.....",
-    ".....ggkkkkkyyyyyyyyykkkkkgg....",
-    "....ogkkgkkkkYYYYYYYkkkkgkkg....",
-    "....ogkkkkkkwwyyyyywwkkkkkkg....",
-    "...oogkkkgkwwwwyyywwwwkgkkkgo...",
-    "...oogkkkkwwwwwwywwwwwwkkkkgo...",
-    "..ooogkkkkwwwwwwwwwwwwwkkkkgoo..",
-    "..ooogkkkkwwwwwwwwwwwwwkkkkgoo..",
-    "..ooogkkkwwwwwwwwwwwwwwwkkkgoo..",
-    "..ooogkkkwwwwwwwwwwwwwwwkkkgoo..",
-    "..ooogkkkwwwwwwwwwwwwwwwkkkgoo..",
-    "..oooogkkwwwwwwwwwwwwwwwkkgooo..",
-    "..oooogkkwwwwwwwwwwwwwwwkkgooo..",
-    "...ooogkkwwwwwwwwwwwwwwwkkgoo...",
-    "...oooogkkwwwwwwwwwwwwwkkgooo...",
-    "....ooogkkwwwwwwwwwwwwwkkgoo....",
-    "....oooogkwwwwwwwwwwwwwkgooo....",
-    ".....ooookkwwwwwwwwwwwkkooo.....",
-    "......ffffkkwwwwwwwwwkkffff.....",
-    "....fffffffkkwwwwwwwkkfffffff...",
-    "...fffffffffkkwwwwwkkfffffffff..",
-    "...fffffffffffkkkkkfffffffffff..",
-    "....fffffffffff...fffffffffff...",
-    "......fffffff.......fffffff.....",
-    "................................",
-};
+static u32 psx_logo_line[PSX_LOGO_WIDTH / 2] __initdata;
 
-void psxvga_draw_boot_logo(void)
+void __init psxvga_draw_boot_logo(void)
 {
-    int y, x, end;
-    unsigned int color;
-    char shade;
+    unsigned short colors[16];
+    int i, x, y;
+    unsigned char pair;
 
-    for (y = 0; y < PSX_TUX_HEIGHT; ++y) {
-        x = 0;
-        while (x < PSX_TUX_WIDTH) {
-            shade = psx_tux_rows[y][x];
-            if (shade == '.') {
-                ++x;
-                continue;
-            }
-            end = x + 1;
-            while (end < PSX_TUX_WIDTH && psx_tux_rows[y][end] == shade)
-                ++end;
-
-            switch (shade) {
-            case 'g': color = 0x00787878; break;
-            case 'k': color = 0x0026262a; break;
-            case 'o': color = 0x009b9b9b; break;
-            case 'w': color = 0x00f4f4f4; break;
-            case 'p': color = 0x00101010; break;
-            case 'y': color = 0x0024aeff; break;
-            case 'Y': color = 0x005edeff; break;
-            case 'f': color = 0x0012b1ff; break;
-            default: color = 0x00ffffff; break;
-            }
-
-            line(((PSX_TUX_Y + y * 2) << 16) | (PSX_TUX_X + x * 2),
-                 (2 << 16) | ((end - x) * 2), color);
-            gpu_dma_gpu_idle();
-            x = end;
-        }
+    for (i = 0; i < 16; i++) {
+        colors[i] = ((unsigned short)(linux_logo16_red[i] >> 3)) |
+                    ((unsigned short)(linux_logo16_green[i] >> 3) << 5) |
+                    ((unsigned short)(linux_logo16_blue[i] >> 3) << 10);
     }
+
+    for (y = 0; y < PSX_LOGO_HEIGHT; y++) {
+        for (x = 0; x < PSX_LOGO_WIDTH / 2; x++) {
+            pair = linux_logo16[y * (PSX_LOGO_WIDTH / 2) + x];
+            psx_logo_line[x] = (u32)colors[pair >> 4] |
+                               ((u32)colors[pair & 15] << 16);
+        }
+        mem2vram(psx_logo_line, (y << 16) | PSX_LOGO_X,
+                 (1 << 16) | PSX_LOGO_WIDTH, PSX_LOGO_WIDTH / 2);
+    }
+    gpu_dma_gpu_idle();
 }
 
 static void psxvga_init(struct vc_data *conp, int init)
@@ -224,11 +174,13 @@ static inline void psxvga_draw_cell(unsigned int val, int y, int x)
    if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
       return;
 
-   line(((y * PSXVGA_FNT_H) << 16) | (x * PSXVGA_FNT_W),
+   line((((y * PSXVGA_FNT_H) + PSX_LOGO_HEIGHT) << 16) |
+        (x * PSXVGA_FNT_W),
         (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
    if ((val & 0xff) != ' ' && (val & 0xff) != 0) {
-      print2(x * PSXVGA_FNT_W, y * PSXVGA_FNT_H, val & 0xff);
+      print2(x * PSXVGA_FNT_W,
+                   y * PSXVGA_FNT_H + PSX_LOGO_HEIGHT, val & 0xff);
       gpu_dma_gpu_idle();
    }
 }
@@ -245,14 +197,18 @@ static inline void psxvga_printscreen(void)
 {
    int x, y, row;
 
-   cls();
+   /* Do not wipe the 80px logo band when scrolling/redrawing the VT. */
+   line(PSX_LOGO_HEIGHT << 16,
+        ((PSXVGA_SCR_H * PSXVGA_FNT_H) << 16) |
+        (PSXVGA_SCR_W * PSXVGA_FNT_W), PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
    for (y = 0; y < PSXVGA_SCR_H; y++) {
       row = psxvga_physical_row(y);
       for (x = 0; x < PSXVGA_SCR_W; x++) {
          unsigned int val = psxvga_scrbuf[row][x];
          if ((val & 0xff) != 0 && (val & 0xff) != ' ') {
-            print2(x * PSXVGA_FNT_W, y * PSXVGA_FNT_H, val & 0xff);
+            print2(x * PSXVGA_FNT_W,
+                   y * PSXVGA_FNT_H + PSX_LOGO_HEIGHT, val & 0xff);
             gpu_dma_gpu_idle();
          }
       }
@@ -337,7 +293,8 @@ static void psxvga_clear(struct vc_data *conp, int sy, int sx, int height,
          psxvga_scrbuf[psxvga_physical_row(y)][x] = ' ';
 
    /* Clear the entire rectangle with one GPU primitive. */
-   line(((sy * PSXVGA_FNT_H) << 16) | (sx * PSXVGA_FNT_W),
+   line((((sy * PSXVGA_FNT_H) + PSX_LOGO_HEIGHT) << 16) |
+        (sx * PSXVGA_FNT_W),
         ((height * PSXVGA_FNT_H) << 16) | (width * PSXVGA_FNT_W),
         PSXVGA_BG_COLOR);
    gpu_dma_gpu_idle();
@@ -380,7 +337,8 @@ static void psxvga_cursor(struct vc_data *conp, int mode)
    if (y < 0 || y >= PSXVGA_VSCR_H || x < 0 || x >= PSXVGA_VSCR_W)
       return;
 
-   line(((y * PSXVGA_FNT_H) << 16) | (x * PSXVGA_FNT_W),
+   line((((y * PSXVGA_FNT_H) + PSX_LOGO_HEIGHT) << 16) |
+        (x * PSXVGA_FNT_W),
         (PSXVGA_FNT_H << 16) | PSXVGA_FNT_W, PSXVGA_CURSOR_COLOR);
    gpu_dma_gpu_idle();
    psxvga_cury = y;
